@@ -17,7 +17,7 @@ async function bootstrap() {
       const isProduction = process.env.NODE_ENV === 'production';
       
       const allowedOrigins = [
-
+        'https://jason-gachaba.onrender.com',
         'https://jimmyrais-portfolio-rbof.onrender.com',
         'https://pierre-design.onrender.com',
         'https://micho-ngabo.onrender.com',
