@@ -30,7 +30,7 @@ import { ProjetModule } from './projet/projet.module'; // Importer ProjetModule
 import { UploadController } from './upload/upload.controller';
 import { VisitModule } from './visit/visit.module'; // Ajout du module de tracking visite
 import { ServiceModule } from './service/service.module'; // Importer le module de service
-import { StripeModule } from './stripe/stripe.module';
+// import { StripeModule } from './stripe/stripe.module';
 @Module({
   imports: [
       // Charger le module de configuration en premier.
@@ -68,7 +68,7 @@ import { StripeModule } from './stripe/stripe.module';
     ProjetModule, // Ajouté ici pour activer les routes projet
     VisitModule, // Ajouté ici pour activer le tracking des visites
     ServiceModule, 
-    StripeModule, // Ajouté pour activer les routes de service
+    // StripeModule, 
     AgentModule,
     MobilierModule,
   ],
