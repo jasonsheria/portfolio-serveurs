@@ -14,7 +14,8 @@ import { Projet } from '../entity/projet/projet.schema'; // Import Projet schema
 import * as path from 'path';
 import * as fs from 'fs';
 import { OfferedService, OfferedServiceSchema } from '../entity/service/service.schema';
-
+import { Agent } from '../agent/agent.schema'; // Import Agent schema
+import {Mobilier} from '../mobilier/mobilier.schema'; // Import Mobilier schema
 
 @Injectable()
 export class SiteService {
@@ -24,11 +25,13 @@ export class SiteService {
     @InjectModel(Post.name) private readonly postModel: Model<Post>,
     @InjectModel(Category.name) private readonly categoryModel: Model<Category>, // Inject CategoryModel
     @InjectModel(Tag.name) private readonly tagModel: Model<Tag>, // Inject TagModel
-    @InjectModel(Template.name) private readonly templateModel: Model<Template>,    @InjectModel('OfferedService') private readonly serviceModel: Model<OfferedService>,
+    @InjectModel(Template.name) private readonly templateModel: Model<Template>, @InjectModel('OfferedService') private readonly serviceModel: Model<OfferedService>,
     @InjectModel(Portfolio.name) private readonly portfolioModel: Model<Portfolio>,
     @InjectModel(Message.name) private readonly messageModel: Model<Message>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
     @InjectModel(Projet.name) private readonly projetModel: Model<Projet>,
+    @InjectModel(Agent.name) private readonly agentModel: Model<Agent>, // Inject AgentModel
+    @InjectModel(Mobilier.name) private readonly mobilierModel: Model<Mobilier>, // Inject MobilierModel
   ) { }
   async createOrUpdateSite(user: User, data: any): Promise<any> {
     const userId = (user as any)._id ? (user as any)._id.toString() : user.id?.toString();
@@ -164,11 +167,11 @@ export class SiteService {
   async getSitesByUser(userId: string): Promise<Site[]> {
     const sites = await this.siteModel.find({ user: userId }).exec(); // Added await and .exec()
     // faire une recherche de template avec l'id du sites recupere
-    
+
     return sites;
   }
 
-  async getSiteById(userId: string){
+  async getSiteById(userId: string) {
 
     const sites = await this.siteModel.findOne({ user: userId }).exec(); // Added await and .exec()
     // faire une recherche de template avec l'id du sites recupere
@@ -177,7 +180,7 @@ export class SiteService {
       throw new NotFoundException(`No site found for user with ID "${userId}".`);
     }
 
-    return { data : [sites , template] }; // Convert to plain object
+    return { data: [sites, template] }; // Convert to plain object
 
   }
 
@@ -283,16 +286,16 @@ export class SiteService {
     // 1. Trouver le template par ID
     const template = await this.templateModel.findById(templateId).lean();
     if (!template) throw new NotFoundException(`Template avec l'ID '${templateId}' introuvable.`);
-    
+
     // 2. Récupérer le site associé au template
     const site = await this.siteModel.findById(template.site).lean();
     if (!site) throw new NotFoundException(`Site associé au template '${templateId}' introuvable.`);
-      // 3. Récupérer le user associé au site
+    // 3. Récupérer le user associé au site
     const user = await this.userModel.findById(site.user).lean();
 
     // 4. Récupérer les posts associés au site
     const postsWithMedia = await this.postModel.find({ site: site._id }).lean();    // 5. Récupérer TOUS les portfolios associés au site
-     // 1. Récupérer tous les IDs de médias
+    // 1. Récupérer tous les IDs de médias
     const mediaIds = postsWithMedia.reduce((acc, post) => {
       if (post.media && post.media.length > 0) {
         acc.push(...post.media.map(media => media.toString()));
@@ -305,7 +308,7 @@ export class SiteService {
     if (mediaIds.length > 0) {
       medias = await this.mediaModel.find({ _id: { $in: mediaIds } }).lean();
     }
-     // 3. Créer une map pour accès rapide par ID
+    // 3. Créer une map pour accès rapide par ID
     const mediaMap = medias.reduce((acc, media) => {
       acc[media._id.toString()] = media;
       return acc;
@@ -324,8 +327,8 @@ export class SiteService {
       if (this.portfolioModel) {
         // Convertir site._id en string pour éviter les problèmes d'ObjectId
         const siteIdString = site._id.toString();
-        portfolios = await this.portfolioModel.find({ 
-          site: { $in: [site._id, siteIdString] } 
+        portfolios = await this.portfolioModel.find({
+          site: { $in: [site._id, siteIdString] }
         }).lean();
       }
     } catch (error) {
@@ -333,7 +336,7 @@ export class SiteService {
     }
 
     // 6. Récupérer les messages associés aux posts du site
-    
+
     let messages = [];
     if (posts.length > 0 && this.messageModel) {
       const postIds = posts.map(p => p._id);
@@ -354,22 +357,41 @@ export class SiteService {
       if (this.projetModel) {
         // Convertir site._id en string pour éviter les problèmes d'ObjectId
         const userIdString = user._id.toString();
-        projet = await this.projetModel.find({ 
-          user: { $in: [user._id, userIdString] } 
+        projet = await this.projetModel.find({
+          user: { $in: [user._id, userIdString] }
         }).lean();
       }
     } catch (error) {
       console.error('[ERROR] Erreur lors de la récupération des projets:', error);
     }
-
-    return {GlobalData: [      site,
-      user,
-      template,
-      posts,
-      portfolios,
-      messages,
-      services,
-      projet
-    ]};
+    if (site.siteType === 'immobilier') {
+      const mobilier = await this.mobilierModel.find({ site: site._id }).lean();
+      const agent = await this.agentModel.find({ site: site._id }).lean();
+      site.isSecure = true; // Assurer que le site est sécurisé pour l'immobilier
+      return {
+        GlobalData: [
+          site,
+          user,
+          template,
+          posts,
+          messages,
+          services,
+          mobilier,
+          agent,
+      
+        ]
+      };
+    }
+    return {
+      GlobalData: [site,
+        user,
+        template,
+        posts,
+        portfolios,
+        messages,
+        services,
+        projet
+      ]
+    };
   }
 }

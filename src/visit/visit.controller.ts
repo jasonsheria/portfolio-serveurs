@@ -20,6 +20,8 @@ export class VisitController {
   @Get('visits')
   async getVisitsByTemplate(@Query('site') templateId: string) {
     if (!templateId) return { success: false, message: 'siteId manquant' };
-    return this.visitService.getVisitsByTemplate(templateId);
+    const data = this.visitService.getVisitsByTemplate(templateId);
+    console.log(data);
+    return data;
   }
 }

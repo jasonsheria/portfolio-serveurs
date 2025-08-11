@@ -11,8 +11,8 @@ export class AgentService {
     return this.agentModel.create(data);
   }
 
-  async findAll(): Promise<Agent[]> {
-    return this.agentModel.find().exec();
+  async findAll(siteId: string): Promise<Agent[]> {
+    return this.agentModel.find({ site_id: siteId }).exec();
   }
 
   async findOne(id: string): Promise<Agent> {

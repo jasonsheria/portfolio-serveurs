@@ -14,6 +14,8 @@ import { Portfolio, PortfolioSchema } from '../entity/portfolio/portfolio.schema
 import { Message, MessageSchema } from '../entity/messages/message.schema'; // Import Message schema
 import { User, UserSchema } from '../entity/users/user.schema'; // Import User schema
 import { Projet, ProjetSchema } from '../entity/projet/projet.schema'; // Import Project schema
+import { Agent, AgentSchema } from '../agent/agent.schema';
+import { Mobilier, MobilierSchema } from '../mobilier/mobilier.schema'; // Import Mobilier schema
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -28,6 +30,8 @@ import { Projet, ProjetSchema } from '../entity/projet/projet.schema'; // Import
       { name: Message.name, schema: MessageSchema }, // Add MessageModel provider
       { name: User.name, schema: UserSchema }, // Add UserModel provider
       { name: Projet.name, schema: ProjetSchema }, // Add ProjectModel provider
+      { name: Agent.name, schema: AgentSchema },
+      { name: Mobilier.name, schema: MobilierSchema }, // Add MobilierModel provider
     ]),
     UsersModule,
   ],

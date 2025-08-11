@@ -19,6 +19,9 @@ export class Message extends Document {
    // createdAt et updatedAt seront ajoutés par `timestamps: true` si vous l'activez
   @Prop({ default: Date.now }) 
   createdAt: Date;
+
+  @Prop({ default: false })
+  isRead: boolean;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

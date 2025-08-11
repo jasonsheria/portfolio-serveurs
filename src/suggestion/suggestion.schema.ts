@@ -6,6 +6,9 @@ export class Suggestion extends Document {
   @Prop({ required: false })
   email: string;
 
+  @Prop({ default: false })
+  isRead: boolean;
+
   @Prop({ required: false })
   firstName: string;
 

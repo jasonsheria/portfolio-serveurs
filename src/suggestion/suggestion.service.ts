@@ -1,3 +1,4 @@
+import { sendSuggestionReply } from './suggestion.mailer';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -11,6 +12,28 @@ export class SuggestionService {
     @InjectModel(Suggestion.name) private suggestionModel: Model<Suggestion>,
     private readonly usersService: UsersService,
   ) {}
+
+  async markAsRead(suggestionId: string): Promise<Suggestion> {
+    return this.suggestionModel.findByIdAndUpdate(suggestionId, { isRead: true }, { new: true }).exec();
+  }
+
+  async markAsUnread(suggestionId: string): Promise<Suggestion> {
+    return this.suggestionModel.findByIdAndUpdate(suggestionId, { isRead: false }, { new: true }).exec();
+  }
+
+  async deleteSuggestion(suggestionId: string): Promise<void> {
+    await this.suggestionModel.findByIdAndDelete(suggestionId).exec();
+  }
+
+  async replyToSuggestion(suggestionId: string, reply: string): Promise<void> {
+    const suggestion = await this.suggestionModel.findById(suggestionId).exec();
+    if (!suggestion || !suggestion.email) throw new Error('Expéditeur ou email introuvable');
+    await sendSuggestionReply(suggestion.email, {
+      senderName: suggestion.firstName || suggestion.email,
+      message: suggestion.message,
+      reply
+    });
+  }
 
   async create(data: Partial<Suggestion>): Promise<Suggestion> {
     console.log('[SUGGESTION] Début création suggestion', data);

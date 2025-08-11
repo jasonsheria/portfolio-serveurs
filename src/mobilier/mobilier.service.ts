@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Injectable, NotFoundException,BadRequestException } from '@nestjs/common';
+import { InjectModel} from '@nestjs/mongoose';
 import { Mobilier } from './mobilier.schema';
+import { Model, Types } from 'mongoose';
 
 @Injectable()
 export class MobilierService {
@@ -11,8 +11,11 @@ export class MobilierService {
     return this.mobilierModel.create(data);
   }
 
-  async findAll(): Promise<Mobilier[]> {
-    return this.mobilierModel.find().populate('agent').exec();
+  async findAll(siteId: String): Promise<Mobilier[]> {
+    if (!siteId) {
+      throw new BadRequestException('SiteId requis');
+    }
+    return this.mobilierModel.find({ site_id: siteId }).populate('agent').exec();
   }
 
   async findOne(id: string): Promise<Mobilier> {

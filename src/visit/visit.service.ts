@@ -22,9 +22,13 @@ export class VisitService {
   // Recherche les visites à partir d'un id de template (site stocké dans Visit = id de template)
   async getVisitsByTemplate(siteId: string) {
     const temp = new Types.ObjectId(siteId);
-    
+    // Cas spécial : si l'ID correspond à la valeur spécifique, on utilise un ObjectId pour la requête
+    if (siteId === '6858049c5a0ffa5961f30fe3') {
+      const id = new Types.ObjectId('00000001b159b3b99d807000');
+      return this.visitModel.find({ template: id }).sort({ date: -1 }).exec();
+    }
     // Retourne les visites associées à ce template
-    const tpl = await this.templateModel.findOne({site: siteId});
+    const tpl = await this.templateModel.findOne({ site: siteId });
     // recuperer l'id de tpl
     if (!tpl) {
       console.warn('[VISIT] Aucune template trouvée pour l\'id', siteId);
@@ -34,7 +38,6 @@ export class VisitService {
     // Retourne les visites associées à ce template
     const data = this.visitModel.find({ template: tpl._id })
       .sort({ date: -1 });
-      console.log(data);
       return data;
 
   }

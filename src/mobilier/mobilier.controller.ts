@@ -1,5 +1,23 @@
-import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post, 
+  Put, 
+  Body,
+  UseInterceptors,
+  UploadedFiles,
+  Req,
+  BadRequestException,
+  Get,
+  Query,
+  Request,
+  UseGuards,
+  Delete, 
+  Param,  
+  Res,
+} from '@nestjs/common';
 import { MobilierService } from './mobilier.service';
+import { Types } from 'mongoose';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('mobiliers')
 export class MobilierController {
@@ -7,12 +25,19 @@ export class MobilierController {
 
   @Post()
   create(@Body() body: any) {
+    // S'assurer que le payload contient bien site_id et agent
+    if (!body.site_id || !body.agent) {
+      throw new BadRequestException('site_id et agent sont requis');
+    }
     return this.mobilierService.create(body);
   }
 
   @Get()
-  findAll() {
-    return this.mobilierService.findAll();
+  findAll(@Query('site') siteIdRaw: string) {
+      if (!siteIdRaw || typeof siteIdRaw !== 'string' || !/^[a-fA-F0-9]{24}$/.test(siteIdRaw)) {
+        throw new BadRequestException('site_id is invalid or missing (format).');
+      }
+    return this.mobilierService.findAll(siteIdRaw);
   }
 
   @Get(':id')

@@ -38,6 +38,9 @@ export class Mobilier extends Document {
 
   @Prop({ type: Types.ObjectId, ref: 'Agent', required: true })
   agent: Types.ObjectId;
+
+  @Prop({ required: true })
+  site_id: string; // Référence au site auquel appartient le mobilier
 }
 
 export const MobilierSchema = SchemaFactory.createForClass(Mobilier);
