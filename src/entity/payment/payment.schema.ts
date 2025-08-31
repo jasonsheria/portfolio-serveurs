@@ -5,33 +5,48 @@ import { User } from '../users/user.schema';
 import { Site } from '../site/site.schema';
 @Schema()
 export class Payment extends Document {
-    @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-    client : User;
+    @Prop({ type: Types.ObjectId, ref: 'User', required: false })
+    client: User;
+
     @Prop({ type: Types.ObjectId, ref: 'Site', required: false })
     site: Site;
-    @Prop({ required: false })
-    cardHolderName: string;
-    @Prop({ required: false, unique: false })
-    mobileNumber: string;
-    @Prop({ required: false })
-    mobileMoneyPin: string;
-    @Prop({ required: false })
-    cardNumber: string;
-    @Prop({ required: false })
-    expiryDate: string;
-    @Prop({ required: false })
-    cvv: string;
+
     @Prop({ required: true })
     amount: number;
-    @Prop({ required: false })
+
+    @Prop({ required: true })
+    currency: string;
+
+    @Prop({ required: true })
     paymentMethod: string;
-    @Prop({ required: false })
-    planId : number;
-    @Prop({ required: false })
-    mobileMoneyProvider: string;
+
+    @Prop({ required: true })
+    status: string;
+
+    @Prop({ required: true })
+    freshpayPaymentId: string;
+
+    @Prop({ type: Object, required: true })
+    metadata: {
+        accountId: string;
+        accountType: string;
+        plan: string;
+    };
+
+    @Prop({ type: Object, required: false })
+    paymentDetails: {
+        cardHolderName?: string;
+        cardNumber?: string;
+        expiryDate?: string;
+        cvv?: string;
+        mobileNumber?: string;
+    };
 
     @Prop({ default: Date.now })
     createdAt: Date;
+
+    @Prop()
+    completedAt: Date;
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(Payment);

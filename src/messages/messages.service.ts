@@ -147,6 +147,71 @@ export class MessagesService {
          }
     }
 
+    // --- New helper methods used by the HTTP controller ---
+
+    /** Find messages optionally filtered by userId (sender or recipient). */
+    async findAll(userId?: string): Promise<any[]> {
+        try {
+            if (!userId) {
+                // Return last 50 messages as a basic fallback
+                const msgs = await this.messageModel.find().sort({ timestamp: -1 }).limit(50).lean().exec();
+                return msgs;
+            }
+            // Search for messages where the user is sender or recipient
+            const msgs = await this.messageModel.find({ $or: [{ sender: userId }, { recipient: userId }] }).sort({ timestamp: -1 }).limit(100).lean().exec();
+            return msgs;
+        } catch (error) {
+            this.logger.error('Erreur findAll messages: ' + error.message, error.stack);
+            return [];
+        }
+    }
+
+    /** Mark a message as read (sets a boolean 'isRead' if exists, or sets 'readAt'). */
+    async markAsRead(id: string) {
+        try {
+            const updated = await this.messageModel.findByIdAndUpdate(id, { $set: { isRead: true, readAt: new Date() } }, { new: true }).lean().exec();
+            return updated;
+        } catch (error) {
+            this.logger.error('Erreur markAsRead: ' + error.message, error.stack);
+            throw error;
+        }
+    }
+
+    /** Mark a message as unread */
+    async markAsUnread(id: string) {
+        try {
+            const updated = await this.messageModel.findByIdAndUpdate(id, { $set: { isRead: false }, $unset: { readAt: 1 } }, { new: true }).lean().exec();
+            return updated;
+        } catch (error) {
+            this.logger.error('Erreur markAsUnread: ' + error.message, error.stack);
+            throw error;
+        }
+    }
+
+    /** Remove a message by id */
+    async remove(id: string) {
+        try {
+            await this.messageModel.findByIdAndDelete(id).exec();
+            return true;
+        } catch (error) {
+            this.logger.error('Erreur remove message: ' + error.message, error.stack);
+            throw error;
+        }
+    }
+
+    /** Reply to a message. For now we simply log and optionally persist the reply in a 'replies' array. */
+    async replyToMessage(id: string, reply: string) {
+        try {
+            // Optionally push into a replies array in the message document
+            const updated = await this.messageModel.findByIdAndUpdate(id, { $push: { replies: { text: reply, date: new Date() } } }, { new: true }).lean().exec();
+            // Also you could send an email here via a mailer service
+            return updated;
+        } catch (error) {
+            this.logger.error('Erreur replyToMessage: ' + error.message, error.stack);
+            throw error;
+        }
+    }
+
     // Ajoutez ici d'autres méthodes utiles pour votre service de messages, par exemple :
     // - marquer un message comme lu
     // - supprimer un message

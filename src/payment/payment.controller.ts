@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, BadRequestException } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { UsersService } from '../users/users.service';
 import { AuthService } from '../auth/auth.service';
@@ -15,8 +15,12 @@ export class PaymentController {
 
     @UseGuards(JwtAuthGuard)
     @Post('create')
-    async createPayment(@Body() createPaymentDto: any) {
-        return this.paymentService.processPayment(createPaymentDto);
+    async createPayment(@Body() createPaymentDto: CreatePaymentDto) {
+        try {
+            return await this.paymentService.processPayment(createPaymentDto);
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
     }
 
     @Get(':id')

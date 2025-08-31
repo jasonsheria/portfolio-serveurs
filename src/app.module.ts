@@ -27,10 +27,12 @@ import { TemplateModule } from './template/template.module';
 import { SuggestionModule } from './suggestion';
 import { ProjectModule } from './project/project.module'; // Importer ProjectModule
 import { ProjetModule } from './projet/projet.module'; // Importer ProjetModule
+import { NotificationsModule } from './notifications/notifications.module';
 import { UploadController } from './upload/upload.controller';
 import { VisitModule } from './visit/visit.module'; // Ajout du module de tracking visite
 import { ServiceModule } from './service/service.module'; // Importer le module de service
 // import { StripeModule } from './stripe/stripe.module';
+import { OwnerModule } from './owner/owner.module';
 @Module({
   imports: [
       // Charger le module de configuration en premier.
@@ -64,6 +66,7 @@ import { ServiceModule } from './service/service.module'; // Importer le module 
     PortfolioModule, // Ajouté ici pour activer les routes portfolio
     TemplateModule, // Ajouté pour activer les routes template
     SuggestionModule,
+  NotificationsModule,
     ProjectModule, // Ajouté ici pour activer les routes projet
     ProjetModule, // Ajouté ici pour activer les routes projet
     VisitModule, // Ajouté ici pour activer le tracking des visites
@@ -71,6 +74,7 @@ import { ServiceModule } from './service/service.module'; // Importer le module 
     // StripeModule, 
     AgentModule,
     MobilierModule,
+    OwnerModule,
   ],
   controllers: [AppController, UploadController],
   providers: [AppService],

@@ -365,8 +365,11 @@ export class SiteService {
       console.error('[ERROR] Erreur lors de la récupération des projets:', error);
     }
     if (site.siteType === 'immobilier') {
-      const mobilier = await this.mobilierModel.find({ site: site._id }).lean();
-      const agent = await this.agentModel.find({ site: site._id }).lean();
+      const mobilier = await this.mobilierModel.find({ site_id: site._id }).lean();
+      const agent = await this.agentModel.find({ site_id: site._id }).lean();
+      console.log('site_id:', site._id);
+      console.log('Mobilier et agent récupérés pour le site immobilier:', mobilier, agent);
+    
       site.isSecure = true; // Assurer que le site est sécurisé pour l'immobilier
       return {
         GlobalData: [
@@ -380,6 +383,7 @@ export class SiteService {
           agent,
       
         ]
+
       };
     }
     return {

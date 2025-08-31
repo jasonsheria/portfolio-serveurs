@@ -6,16 +6,20 @@ import { AuthModule } from '../auth/auth.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Payment, PaymentSchema } from '../entity/payment/payment.schema';
 import { User, UserSchema } from '../entity/users/user.schema';
+import { ConfigModule } from '@nestjs/config';
+import { Owner, OwnerSchema } from '../entity/owner/owner.schema';
 import { SiteModule } from '../site/site.module';
 @Module({
-  imports :[
+  imports: [
     UsersModule,
     AuthModule,
     MongooseModule.forFeature([
       { name: Payment.name, schema: PaymentSchema },
-      { name: User.name, schema: UserSchema }
+      { name: 'User', schema: UserSchema },
+      { name: 'Owner', schema: OwnerSchema }
     ]),
-    SiteModule
+    SiteModule,
+    ConfigModule
   ],
   controllers: [PaymentController],
   providers: [PaymentService],

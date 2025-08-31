@@ -1,28 +1,29 @@
 import {
   Injectable,
-  NotFoundException, // Utile pour les cas où un élément n'est pas trouvé
-  ConflictException, // Utile pour les cas de duplication (email existant)
-  Logger // Pour le logging
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  Logger
 } from '@nestjs/common';
-import {User} from '../entity/users/user.schema';
-// Importez le décorateur InjectModel
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
-// Importez le type Model de mongoose
 import { Model, Types } from 'mongoose';
-// Importez l'interface/type de votre document Mongoose User.
-// Assurez-vous que le chemin et les noms (User, UserDocument) correspondent à votre fichier user.schema.ts
-import { Payment } from '../entity/payment/payment.schema'; // Assurez-vous que le chemin est correct
-import { CreatePaymentDto } from './dto/payment.dto'; // Assurez-vous que le chemin est correct
-import { UsersService } from 'src/users/users.service';
-import { Site } from '../entity/site/site.schema'; // Assurez-vous que le chemin est correct
+import { Payment } from '../entity/payment/payment.schema';
+import { CreatePaymentDto } from './dto/payment.dto';
+import { UsersService } from '../users/users.service';
+import { Site } from '../entity/site/site.schema';
+import { User } from '../entity/users/user.schema';
+import * as axios from 'axios';
 
 @Injectable()
 export class PaymentService {
     constructor(
-        @InjectModel(User.name) private userModel: Model<User>,
+        @InjectModel('User') private userModel: Model<User>,
         @InjectModel(Payment.name) private paymentModel: Model<Payment>,
         @InjectModel(Site.name) private siteModel: Model<Site>,
-         private usersService: UsersService, 
+        @InjectModel('Owner') private ownerModel: Model<any>,
+        private usersService: UsersService,
+        private configService: ConfigService
     ) {
             // L'ancienne simulation en mémoire (private readonly usersModel: Model<User>, this.usersModel = userModel,
             // ainsi que les références à this.users et this.nextId) a été retirée.
@@ -32,48 +33,183 @@ export class PaymentService {
     
     // Example method to handle payment processing
         
-    async processPayment(data: CreatePaymentDto): Promise<Payment> {
-        // On extrait userId, siteId (au lieu de projectId) et on construit un nouvel objet sans userId mais avec client et site
-        const { userId, amount, paymentMethod, siteId, ...rest } = data;
+    async processPayment(data: CreatePaymentDto): Promise<any> {
+        const { amount, paymentMethod, accountId, accountType, plan, paymentDetails } = data;
         Logger.log('Début processPayment', 'PaymentService');
         Logger.log('Payload reçu : ' + JSON.stringify(data), 'PaymentService');
-        const user = await this.usersService.findById(userId);
-        Logger.log('Résultat recherche user : ' + (user ? 'trouvé' : 'non trouvé'), 'PaymentService');
 
-        if (!user) {
-            Logger.warn('Utilisateur non trouvé, annulation paiement', 'PaymentService');
-            throw new NotFoundException('Utilisateur non trouvé');
-        }
         if (amount <= 0) {
             Logger.warn('Montant <= 0, annulation paiement', 'PaymentService');
-            throw new ConflictException('Le montant doit être supérieur à 0');
+            throw new BadRequestException('Le montant doit être supérieur à 0');
         }
-        // Recherche du site lié à ce user
-        Logger.log(`Recherche du site avec _id=${siteId} et user=${user._id}`, 'PaymentService');
-        const siteById = await this.siteModel.findById(siteId);
-        Logger.log(`Site trouvé par _id: ${JSON.stringify(siteById)}`, 'PaymentService');
-        const site = await this.siteModel.findOne({ _id: siteId, user: user._id.toString() });
-        if (!site) {
-            Logger.warn('Site non trouvé ou n\'appartient pas à l\'utilisateur', 'PaymentService');
-            throw new NotFoundException('Site non trouvé ou n\'appartient pas à cet utilisateur');
+
+        // Vérifier que tous les champs requis sont présents
+        if (!accountId || !accountType || !plan || !paymentMethod) {
+            throw new BadRequestException('Informations de paiement incomplètes');
         }
-        Logger.log('Création du paiement en base...', 'PaymentService');
-        // On crée le paiement avec client (clé étrangère vers User) et site
-        const payment = new this.paymentModel({ ...rest, amount, paymentMethod, client: user._id, site: site._id });
-        await payment.save();
-        Logger.log('Paiement enregistré avec succès : ' + JSON.stringify(payment), 'PaymentService');
-        // Mettre à jour l'utilisateur si besoin (ex: isAdmin)
+
         try {
-            const updatedUser = await this.userModel.findByIdAndUpdate(user._id, { isAdmin: true }, { new: true });
-            Logger.log(`Utilisateur ${user._id} mis à jour : isAdmin=${updatedUser?.isAdmin}`, 'PaymentService');
-        } catch (err) {
-            Logger.error('Erreur lors de la mise à jour de isAdmin : ' + err, 'PaymentService');
+            // Valider les informations de paiement
+            this.validatePaymentDetails(data);
+
+            // Configuration FreshPay
+            const FRESHPAY_API_URL = process.env.FRESHPAY_API_URL;
+            const FRESHPAY_API_KEY = process.env.FRESHPAY_API_KEY;
+            const FRESHPAY_MERCHANT_ID = process.env.FRESHPAY_MERCHANT_ID;
+
+            // Préparer les données pour FreshPay
+            const paymentData = {
+                merchant_id: FRESHPAY_MERCHANT_ID,
+                amount: amount,
+                currency: 'USD',
+                payment_method: this.mapPaymentMethod(paymentMethod),
+                description: `Abonnement ${plan} pour compte ${accountType}`,
+                return_url: `${process.env.FRONTEND_URL}/payment/confirm`,
+                cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+                notify_url: `${process.env.BACKEND_URL}/api/payment/webhook`,
+                metadata: {
+                    accountId,
+                    accountType,
+                    plan,
+                },
+                ...(['visa', 'mastercard'].includes(paymentMethod) 
+                    ? {
+                        card: {
+                            holder_name: data.paymentDetails.cardHolderName,
+                            number: data.paymentDetails.cardNumber,
+                            expiry: data.paymentDetails.expiryDate.replace('/', ''),
+                            cvv: data.paymentDetails.cvv
+                        }
+                    }
+                    : {
+                        mobile_money: {
+                            phone_number: data.paymentDetails.mobileNumber
+                        }
+                    }
+                )
+            };
+
+            // Appel à l'API FreshPay
+            const axios = require('axios');
+            const response = await axios.post(
+                `${FRESHPAY_API_URL}/payments`,
+                paymentData,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${FRESHPAY_API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            // Créer l'entrée de paiement dans notre base
+            const payment = new this.paymentModel({
+                amount,
+                currency: 'USD',
+                paymentMethod,
+                status: 'pending',
+                freshpayPaymentId: response.data.payment_id,
+                metadata: {
+                    accountId,
+                    accountType,
+                    plan,
+                },
+                paymentDetails: data.paymentDetails
+            });
+            await payment.save();
+
+            return {
+                paymentUrl: response.data.payment_url,
+                paymentId: response.data.payment_id,
+            };
+        } catch (error) {
+            Logger.error('Erreur lors du processus de paiement: ' + error.message, 'PaymentService');
+            throw new ConflictException('Erreur lors du processus de paiement: ' + error.message);
         }
-        // Retourne le paiement avec infos user et site
-        return await this.paymentModel.findById(payment._id)
-            .populate('client')
-            .populate('site')
-            .exec();
+    }
+
+    private mapPaymentMethod(method: string): string {
+        const mapping = {
+            'airtel': 'airtel_money',
+            'orange': 'orange_money',
+            'vodacom': 'mpesa',
+            'visa': 'card',
+            'mastercard': 'card',
+        };
+
+        const mappedMethod = mapping[method] || method;
+
+        if (!mappedMethod) {
+            throw new Error(`Méthode de paiement non supportée: ${method}`);
+        }
+
+        return mappedMethod;
+    }
+
+    private validatePaymentDetails(data: CreatePaymentDto): void {
+        const { paymentMethod, paymentDetails } = data;
+
+        if (['visa', 'mastercard'].includes(paymentMethod)) {
+            if (!paymentDetails.cardHolderName || 
+                !paymentDetails.cardNumber || 
+                !paymentDetails.expiryDate || 
+                !paymentDetails.cvv) {
+                throw new Error('Informations de carte incomplètes');
+            }
+
+            if (paymentDetails.cardNumber.length !== 16) {
+                throw new Error('Numéro de carte invalide');
+            }
+
+            if (paymentDetails.cvv.length !== 3) {
+                throw new Error('Code CVV invalide');
+            }
+
+            const [month, year] = paymentDetails.expiryDate.split('/');
+            if (!month || !year || +month > 12 || +month < 1) {
+                throw new Error('Date d\'expiration invalide');
+            }
+        } else {
+            if (!paymentDetails.mobileNumber || paymentDetails.mobileNumber.length !== 9) {
+                throw new Error('Numéro de téléphone invalide');
+            }
+        }
+    }
+
+    async handlePaymentWebhook(webhookData: any): Promise<any> {
+        const { payment_id, status, metadata } = webhookData;
+        const { accountId, plan } = metadata;
+
+        // Vérifier la signature du webhook (à implémenter selon la documentation FreshPay)
+        
+        if (status === 'completed') {
+            // Mettre à jour le statut du paiement
+            await this.paymentModel.findOneAndUpdate(
+                { freshpayPaymentId: payment_id },
+                { status: 'completed' }
+            );
+
+            // Activer l'abonnement
+            const owner = await this.ownerModel.findById(accountId);
+            if (owner) {
+                owner.isActive = true;
+                owner.subscriptionType = plan;
+                owner.status = 'active';
+                owner.subscriptionStartDate = new Date();
+                owner.subscriptionEndDate = this.calculateSubscriptionEndDate(plan);
+                await owner.save();
+            }
+        }
+
+        return { success: true };
+    }
+
+    private calculateSubscriptionEndDate(plan: string): Date {
+        const date = new Date();
+        if (plan === 'monthly') {
+            date.setMonth(date.getMonth() + 1);
+        }
+        return date;
     }
     
     // Add more methods as needed for payment-related functionalities
