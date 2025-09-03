@@ -96,6 +96,10 @@ export class MobilierService {
       .sort(sort)
       .skip(skip)
       .limit(limit)
+      .populate({
+        path: 'proprietaire',
+        select: '-password'
+      })
       .populate('site')
       .exec();
 
