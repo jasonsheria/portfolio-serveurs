@@ -51,6 +51,96 @@ export class OwnerService {
     }
   }
 
+  async getProfile(userId: Types.ObjectId) {
+    try {
+      const owner = await this.ownerModel.findOne({ user: userId })
+        .populate('user')
+        .select('nom postnom prenom phone email rating certified certRequested certificationNote subscriptionType address types idFilePath propertyTitlePaths status isActive subscriptionEndDate');
+      
+      if (!owner) {
+        throw new NotFoundException('Profil propriétaire non trouvé');
+      }
+
+      const user = owner.user;
+
+      // Formater la réponse
+      return {
+        id: owner._id,
+        name: `${owner.nom} ${owner.postnom} ${owner.prenom}`,
+        email: owner.email || user.email,
+        phone: owner.phone,
+        rating: owner.rating || 0,
+        certified: owner.certified || false,
+        certRequested: owner.certRequested || false,
+        certificationNote: owner.certificationNote || '',
+        subscription: owner.subscriptionType || 'basic',
+        // Informations supplémentaires du propriétaire
+        address: owner.address,
+        types: owner.types,
+        idFilePath: owner.idFilePath,
+        propertyTitlePaths: owner.propertyTitlePaths,
+        status: owner.status,
+        isActive: owner.isActive,
+        subscriptionEndDate: owner.subscriptionEndDate,
+        // Informations de l'utilisateur
+        user: {
+          username: user.username,
+          profileUrl: user.profileUrl || '/logo192.png',
+          secondName: user.secondName,
+          telephone: user.telephone,
+          dateOfBirth: user.dateOfBirth,
+          logo: user.logo,
+          userAddress: user.address,
+          city: user.city,
+          country: user.country,
+          postalCode: user.postalCode,
+          description: user.description,
+          experience: user.experience,
+          website: user.website,
+          languesParlees: user.languesParlees,
+          sport: user.sport,
+          objectifs: user.objectifs,
+          // Informations de l'entreprise
+          company: {
+            name: user.companyName,
+            description: user.companyDescription,
+            website: user.companyWebsite,
+            logo: user.companyLogo,
+            address: user.companyAddress,
+            phone: user.companyPhone,
+            email: user.companyEmail
+          },
+          // Réseaux sociaux
+          social: {
+            linkedin: user.linkedin,
+            github: user.github,
+            facebook: user.facebook,
+            whatsapp: user.whatsapp,
+            instagram: user.instagram
+          },
+          // Informations professionnelles
+          professional: {
+            domaine: user.domaine,
+            expertise: user.expertise
+          },
+          // Images et fichiers
+          media: {
+            profileImage1: user.profileImage1,
+            profileImage2: user.profileImage2,
+            profileImage3: user.profileImage3,
+            cvFile: user.cvFile,
+            postalCardFile: user.postalCardFile
+          }
+        }
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Erreur lors de la récupération du profil : ' + error.message);
+    }
+  }
+
   async findAll() {
     return await this.ownerModel.find().populate('user');
   }

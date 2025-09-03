@@ -28,7 +28,7 @@ export class AuthController {
 
 
 
-  @Post('api/register')
+  @Post('register')
   @UseInterceptors(FileInterceptor('profileImage'))
   @HttpCode(HttpStatus.CREATED) // Réponse 201 Created
   async register(
@@ -44,7 +44,7 @@ export class AuthController {
     return { message: 'Un email de confirmation a été envoyé. Veuillez vérifier votre boîte de réception.' };
   }
 
-  @Get('api/verify-email')
+  @Get('verify-email')
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Query('token') token: string) {
     console.log('Token reçu pour vérification:', token);
@@ -57,7 +57,7 @@ export class AuthController {
     return { message: 'Votre adresse email a été vérifiée. Vous pouvez maintenant vous connecter.' };
   }
 
-  @Post('api/login')
+  @Post('login')
   @HttpCode(HttpStatus.OK) // Réponse 200 OK
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
@@ -65,7 +65,7 @@ export class AuthController {
 
   // Exemple de route protégée par JWT
   @UseGuards(JwtAuthGuard) // Utilise le guard JWT pour protéger cette route
-  @Get('api/profile')
+  @Get('profile')
   async getProfile(@Request() req) {
     // Récupérer le token dans le header Authorization
     const token = req.headers.authorization?.split(' ')[1];
@@ -84,7 +84,7 @@ export class AuthController {
 
   }
   @UseGuards(NoExistingSessionGuard) // Appliquer le garde ici
-  @Post('api/google/login') // Nouvelle route
+  @Post('google/login') // Route sans le préfixe api car il est déjà ajouté globalement
   @HttpCode(HttpStatus.OK)
   async googleLogin(@Body() googleLoginDto: GoogleLoginDto, @Request() req, @Res() res) {
     this.logger.log(`Tentative de connexion Google pour le token : ${googleLoginDto.token?.substring(0, 20)}...`);
@@ -112,7 +112,7 @@ export class AuthController {
     }
   }
 
-  @Post('api/google')
+  @Post('google')
   @HttpCode(HttpStatus.OK)
   async googleLoginFromStatic(@Body('credential') credential: string) {
     if (!credential) {
@@ -132,7 +132,7 @@ export class AuthController {
     }
   }
 
-  @Post('api/logout')
+  @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@Request() req) {
     const token = req.headers.authorization?.split(' ')[1];
@@ -151,7 +151,7 @@ export class AuthController {
   }
   // creer une fonction pour mettre en jour le user present dans userService
   @UseGuards(JwtAuthGuard)
-  @Patch('api/update-profile')
+  @Patch('update-profile')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileFieldsInterceptor([
     { name: 'profileImage1', maxCount: 1 },

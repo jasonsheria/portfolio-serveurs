@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, BadRequestException, ValidationPipe } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { UsersService } from '../users/users.service';
 import { AuthService } from '../auth/auth.service';
@@ -15,10 +15,20 @@ export class PaymentController {
 
     @UseGuards(JwtAuthGuard)
     @Post('create')
-    async createPayment(@Body() createPaymentDto: CreatePaymentDto) {
+    async createPayment(
+        @Body(new ValidationPipe({
+            transform: true,
+            whitelist: true,
+            forbidNonWhitelisted: true
+        })) createPaymentDto: CreatePaymentDto
+    ) {
         try {
             return await this.paymentService.processPayment(createPaymentDto);
         } catch (error) {
+            if (error.response) {
+                // Si c'est déjà une erreur HTTP formatée
+                throw error;
+            }
             throw new BadRequestException(error.message);
         }
     }
@@ -39,5 +49,14 @@ export class PaymentController {
     @UseGuards(JwtAuthGuard)
     async getPaymentBySite(@Param('siteId') siteId: string) {
         return await this.paymentService.getPaymentBySite(siteId);
+    }
+
+    @Post('webhook')
+    async handleWebhook(@Body() webhookData: any) {
+        try {
+            return await this.paymentService.handlePaymentWebhook(webhookData);
+        } catch (error) {
+            throw new BadRequestException('Erreur lors du traitement du webhook: ' + error.message);
+        }
     }
 }

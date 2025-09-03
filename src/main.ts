@@ -9,6 +9,8 @@ import { CorsExceptionFilter } from './filters/cors-exception.filter';
 async function bootstrap() {
   // Spécifiez NestExpressApplication comme type pour l'application pour avoir accès à useStaticAssets
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Set global prefix for all routes
+  app.setGlobalPrefix('api');
   // Configuration CORS pour permettre la c-é-exion depuis votre frontend (HTML)
   // --- CORS complet pour API REST & WebSocket (localhost + prod) ---
   // Configuration CORS améliorée pour gérer les erreurs

@@ -361,7 +361,9 @@ export class UsersService {
             const payment = await this.paymentModel.findOne({ client: admin._id }).sort({ createdAt: -1 });
             let subscriptionType = null, subscriptionStart = null, subscriptionEnd = null;
             if (payment) {
-                subscriptionType = payment.planId === 1 ? 'Premium' : payment.planId === 2 ? 'Standard' : null;
+                // Utilisation du type de plan depuis metadata
+                subscriptionType = payment.metadata?.plan === 'premium' ? 'Premium' : 
+                                 payment.metadata?.plan === 'standard' ? 'Standard' : null;
                 subscriptionStart = payment.createdAt;
                 subscriptionEnd = new Date(new Date(payment.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
             }
@@ -385,7 +387,9 @@ export class UsersService {
         const payment = await this.paymentModel.findOne({ client: admin._id }).sort({ createdAt: -1 });
         let subscriptionType = null, subscriptionStart = null, subscriptionEnd = null;
         if (payment) {
-            subscriptionType = payment.planId === 1 ? 'Premium' : payment.planId === 2 ? 'Standard' : null;
+            // Utilisation du type de plan depuis metadata
+            subscriptionType = payment.metadata?.plan === 'premium' ? 'Premium' : 
+                             payment.metadata?.plan === 'standard' ? 'Standard' : null;
             subscriptionStart = payment.createdAt;
             subscriptionEnd = new Date(new Date(payment.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
         }
@@ -417,7 +421,7 @@ export class UsersService {
             const payment = await this.paymentModel.findOne({ client: admin._id }).sort({ createdAt: -1 });
             if (payment) {
                 if (updateUserDto.subscriptionType) {
-                    payment.planId = updateUserDto.subscriptionType === 'Premium' ? 1 : updateUserDto.subscriptionType === 'Standard' ? 2 : payment.planId;
+                    payment.metadata.plan = updateUserDto.subscriptionType?.toLowerCase() || payment.metadata.plan;
                 }
                 if (updateUserDto.subscriptionStart) {
                     payment.createdAt = new Date(updateUserDto.subscriptionStart);

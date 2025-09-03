@@ -33,6 +33,9 @@ export class Payment extends Document {
         plan: string;
     };
 
+    @Prop({ type: Number, required: false })
+    planId: number;
+
     @Prop({ type: Object, required: false })
     paymentDetails: {
         cardHolderName?: string;

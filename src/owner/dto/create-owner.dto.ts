@@ -45,7 +45,7 @@ export interface OwnerMetaDto {
   types: string[];
   form: {
     nom: string;
-    postnom: string;
+  postnom: string;
     prenom: string;
     email: string;
     phone: string;

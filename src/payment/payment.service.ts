@@ -33,8 +33,22 @@ export class PaymentService {
     
     // Example method to handle payment processing
         
+    private isTestMode = true; // Mettre à true pour le mode simulation
+
+    private generateSimulatedPaymentUrl(params: {
+        paymentId: string;
+        frontendUrl: string;
+        amount: number;
+        paymentMethod: string;
+    }): string {
+        const { paymentId, frontendUrl, amount, paymentMethod } = params;
+        return `${frontendUrl}/payment-simulation/${paymentId}?amount=${amount}&method=${paymentMethod}`;
+    }
+
     async processPayment(data: CreatePaymentDto): Promise<any> {
-        const { amount, paymentMethod, accountId, accountType, plan, paymentDetails } = data;
+        Logger.log('Données de paiement reçues: ' + JSON.stringify(data, null, 2), 'PaymentService');
+
+        const { amount, paymentMethod, accountId, accountType, plan } = data;
         Logger.log('Début processPayment', 'PaymentService');
         Logger.log('Payload reçu : ' + JSON.stringify(data), 'PaymentService');
 
@@ -49,78 +63,102 @@ export class PaymentService {
         }
 
         try {
-            // Valider les informations de paiement
-            this.validatePaymentDetails(data);
+            // Configuration des URLs
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
 
-            // Configuration FreshPay
-            const FRESHPAY_API_URL = process.env.FRESHPAY_API_URL;
-            const FRESHPAY_API_KEY = process.env.FRESHPAY_API_KEY;
-            const FRESHPAY_MERCHANT_ID = process.env.FRESHPAY_MERCHANT_ID;
+            // Simuler un délai de traitement en mode test
+            if (this.isTestMode) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                Logger.log('Mode simulation de paiement activé', 'PaymentService');
+            }
+
+            // Valider les informations de paiement
+            if (['visa', 'mastercard'].includes(paymentMethod)) {
+                if (!data.cardHolderName || !data.cardNumber || !data.expiryDate || !data.cvv) {
+                    throw new Error('Informations de carte incomplètes');
+                }
+            } else {
+                if (!data.mobileNumber) {
+                    throw new Error('Numéro de téléphone manquant');
+                }
+            }
 
             // Préparer les données pour FreshPay
-            const paymentData = {
-                merchant_id: FRESHPAY_MERCHANT_ID,
-                amount: amount,
-                currency: 'USD',
-                payment_method: this.mapPaymentMethod(paymentMethod),
-                description: `Abonnement ${plan} pour compte ${accountType}`,
-                return_url: `${process.env.FRONTEND_URL}/payment/confirm`,
-                cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
-                notify_url: `${process.env.BACKEND_URL}/api/payment/webhook`,
-                metadata: {
-                    accountId,
-                    accountType,
-                    plan,
-                },
-                ...(['visa', 'mastercard'].includes(paymentMethod) 
-                    ? {
-                        card: {
-                            holder_name: data.paymentDetails.cardHolderName,
-                            number: data.paymentDetails.cardNumber,
-                            expiry: data.paymentDetails.expiryDate.replace('/', ''),
-                            cvv: data.paymentDetails.cvv
-                        }
+            let paymentMethodDetails;
+            if (['visa', 'mastercard'].includes(paymentMethod)) {
+                paymentMethodDetails = {
+                    card: {
+                        holder_name: data.cardHolderName,
+                        number: data.cardNumber,
+                        expiry: data.expiryDate.replace('/', ''),
+                        cvv: data.cvv
                     }
-                    : {
-                        mobile_money: {
-                            phone_number: data.paymentDetails.mobileNumber
-                        }
+                };
+            } else {
+                paymentMethodDetails = {
+                    mobile_money: {
+                        phone_number: data.mobileNumber
                     }
-                )
-            };
+                };
+            }
 
-            // Appel à l'API FreshPay
-            const axios = require('axios');
-            const response = await axios.post(
-                `${FRESHPAY_API_URL}/payments`,
-                paymentData,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${FRESHPAY_API_KEY}`,
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
+            // Logger les URLs pour le débogage
+            Logger.log(`Frontend URL: ${frontendUrl}`, 'PaymentService');
+            Logger.log(`Backend URL: ${backendUrl}`, 'PaymentService');
 
-            // Créer l'entrée de paiement dans notre base
-            const payment = new this.paymentModel({
+            // Générer un ID de paiement simulé
+            const simulatedPaymentId = `SIM_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            
+            let responseData;
+            
+            if (this.isTestMode) {
+                // Simuler une réponse de l'API de paiement
+                responseData = {
+                    payment_id: simulatedPaymentId,
+                    payment_url: `${frontendUrl}/payment-simulation/${simulatedPaymentId}`,
+                    status: 'pending',
+                    amount: amount,
+                    currency: 'USD'
+                };
+                Logger.log('Réponse simulée générée:', responseData);
+            } else {
+                // Code réel FreshPay à implémenter plus tard
+                throw new Error('Mode production non configuré');
+            }
+
+            // Créer l'entrée de paiement dans la base de données
+            const paymentRecord = {
                 amount,
                 currency: 'USD',
                 paymentMethod,
                 status: 'pending',
-                freshpayPaymentId: response.data.payment_id,
+                freshpayPaymentId: simulatedPaymentId,
                 metadata: {
                     accountId,
                     accountType,
                     plan,
                 },
-                paymentDetails: data.paymentDetails
-            });
+                paymentDetails: ['visa', 'mastercard'].includes(paymentMethod)
+                    ? {
+                        cardHolderName: data.cardHolderName,
+                        cardNumber: '****' + data.cardNumber?.slice(-4),
+                        expiryDate: data.expiryDate,
+                    }
+                    : {
+                        mobileNumber: data.mobileNumber
+                    }
+            };
+
+            // Sauvegarder le paiement dans la base de données
+            const payment = new this.paymentModel(paymentRecord);
             await payment.save();
 
+            // En mode test, on retourne une URL de simulation
             return {
-                paymentUrl: response.data.payment_url,
-                paymentId: response.data.payment_id,
+                paymentUrl: responseData.payment_url,
+                paymentId: responseData.payment_id,
+                isTestMode: this.isTestMode
             };
         } catch (error) {
             Logger.error('Erreur lors du processus de paiement: ' + error.message, 'PaymentService');
@@ -129,6 +167,11 @@ export class PaymentService {
     }
 
     private mapPaymentMethod(method: string): string {
+        // Si la méthode est 'on', la convertir en 'airtel' par défaut
+        if (method === 'on') {
+            method = 'airtel';
+        }
+
         const mapping = {
             'airtel': 'airtel_money',
             'orange': 'orange_money',
@@ -146,33 +189,14 @@ export class PaymentService {
         return mappedMethod;
     }
 
-    private validatePaymentDetails(data: CreatePaymentDto): void {
-        const { paymentMethod, paymentDetails } = data;
-
-        if (['visa', 'mastercard'].includes(paymentMethod)) {
-            if (!paymentDetails.cardHolderName || 
-                !paymentDetails.cardNumber || 
-                !paymentDetails.expiryDate || 
-                !paymentDetails.cvv) {
-                throw new Error('Informations de carte incomplètes');
-            }
-
-            if (paymentDetails.cardNumber.length !== 16) {
-                throw new Error('Numéro de carte invalide');
-            }
-
-            if (paymentDetails.cvv.length !== 3) {
-                throw new Error('Code CVV invalide');
-            }
-
-            const [month, year] = paymentDetails.expiryDate.split('/');
-            if (!month || !year || +month > 12 || +month < 1) {
-                throw new Error('Date d\'expiration invalide');
-            }
-        } else {
-            if (!paymentDetails.mobileNumber || paymentDetails.mobileNumber.length !== 9) {
-                throw new Error('Numéro de téléphone invalide');
-            }
+    private validatePaymentMethod(method: string): void {
+        // Validation de la méthode de paiement
+        if (method === 'on') {
+            throw new Error('Méthode de paiement non spécifiée');
+        }
+        
+        if (!['visa', 'mastercard', 'airtel', 'orange', 'vodacom'].includes(method)) {
+            throw new Error('Méthode de paiement non supportée');
         }
     }
 

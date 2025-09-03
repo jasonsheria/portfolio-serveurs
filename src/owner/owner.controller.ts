@@ -11,6 +11,8 @@ import { Owner } from '../entity/owner/owner.schema';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Types } from 'mongoose';
+import { Request } from 'express';
+
 // Étendre l'interface Request pour inclure l'utilisateur
 interface RequestWithUser extends Request {
   user: {
@@ -25,7 +27,7 @@ interface UploadedOwnerFiles {
   propertyTitle: Express.Multer.File[];
 }
 
-@Controller('api/owner')
+@Controller('owner')
 export class OwnerController {
   constructor(private readonly ownerService: OwnerService) {}
 
@@ -137,6 +139,13 @@ export class OwnerController {
   async checkUserAccount(@Req() req: RequestWithUser) {
     const userId = new Types.ObjectId(req.user.userId);
     return this.ownerService.findByUserId(userId);
+  }
+
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  async getProfile(@Req() req: RequestWithUser) {
+    const userId = new Types.ObjectId(req.user.userId);
+    return this.ownerService.getProfile(userId);
   }
 
   @Get()
