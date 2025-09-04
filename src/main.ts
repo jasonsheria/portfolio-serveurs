@@ -21,6 +21,7 @@ async function bootstrap() {
       const allowedOrigins = [
         'https://jason-gachaba.onrender.com',
         'https://jimmyrais-portfolio-rbof.onrender.com',
+        'https://kino-app-pjtr.onrender.com',
         'https://pierre-design.onrender.com',
         'https://micho-ngabo.onrender.com',
         'https://patrick-kalengayi.onrender.com',
