@@ -173,7 +173,7 @@ export class OwnerService {
     }
 
     // Vérifier si le compte a déjà été activé avec un abonnement
-    if (owner.isActive || owner.subscriptionType) {
+    if (owner.subscriptionType === 'freemium') {
       throw new BadRequestException('Vous avez déjà épuisé votre temps d\'essai gratuit. Veuillez choisir un autre type d\'abonnement.');
     }
 
