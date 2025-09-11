@@ -119,7 +119,14 @@ export class MobilierController {
   @Get('owner/:ownerId')
   @UseGuards(JwtAuthGuard)
   async findByOwner(@Param('ownerId') ownerId: string, @Query() query: any) {
-    return this.mobilierService.findByProprietaire(ownerId, 'Owner', query);
+
+    console.log(" id owner ", ownerId);
+    console.log(" query ", query);
+    const properties = await this.mobilierService.findByProprietaire(ownerId, 'User', query);
+    return {
+      success: true,
+      data: properties
+    };
   }
 
   @Get('agent/:agentId')

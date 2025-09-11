@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFiles, UseGuards, Req, BadRequestException, InternalServerErrorException, ConflictException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFiles, UseGuards, Req, BadRequestException, InternalServerErrorException, ConflictException, NotFoundException } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -29,7 +29,9 @@ interface UploadedOwnerFiles {
 
 @Controller('owner')
 export class OwnerController {
-  constructor(private readonly ownerService: OwnerService) {}
+  constructor(private readonly ownerService: OwnerService) {
+    console.log('OwnerController initialized');
+  }
 
   private formatFilePath(fullPath: string): string {
     // Obtenir le chemin relatif à partir de la racine du projet
@@ -154,8 +156,36 @@ export class OwnerController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ownerService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    try {
+      console.log("Route /api/owner/:id appelée");
+      console.log("ID reçu:", id);
+      
+      // Essayer d'abord de trouver par ID de propriétaire
+      try {
+        const result = await this.ownerService.findOne(id);
+        console.log("Propriétaire trouvé par ID:", result);
+        return result;
+      } catch (error) {
+        if (error instanceof NotFoundException) {
+          // Si non trouvé par ID, essayer par ID utilisateur
+          console.log("Tentative de recherche par ID utilisateur");
+          const userId = new Types.ObjectId(id);
+          const ownerByUser = await this.ownerService.findByUserId(userId);
+          if (ownerByUser.hasAccount) {
+            console.log("Propriétaire trouvé par ID utilisateur:", ownerByUser.owner);
+            return ownerByUser.owner;
+          }
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error("Erreur dans findOne:", error);
+      if (error instanceof NotFoundException) {
+        throw new NotFoundException("Propriétaire non trouvé");
+      }
+      throw new BadRequestException("Erreur lors de la recherche du propriétaire: " + error.message);
+    }
   }
 
   @Patch(':id')

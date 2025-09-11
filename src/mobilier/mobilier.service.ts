@@ -88,6 +88,7 @@ export class MobilierService {
     };
 
     const total = await this.mobilierModel.countDocuments(filter);
+    
     const pages = Math.ceil(total / limit);
     const skip = (page - 1) * limit;
 
