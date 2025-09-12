@@ -11,7 +11,9 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
-  Query
+  Query,
+  Res,
+  NotFoundException
 } from '@nestjs/common';
 import { MobilierService } from './mobilier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -120,13 +122,8 @@ export class MobilierController {
   @UseGuards(JwtAuthGuard)
   async findByOwner(@Param('ownerId') ownerId: string, @Query() query: any) {
 
-    console.log(" id owner ", ownerId);
-    console.log(" query ", query);
-    const properties = await this.mobilierService.findByProprietaire(ownerId, 'User', query);
-    return {
-      success: true,
-      data: properties
-    };
+    console.log("is owner", ownerId);
+    return this.mobilierService.findByProprietaire(ownerId, 'User', query);
   }
 
   @Get('agent/:agentId')
@@ -244,5 +241,21 @@ export class MobilierController {
   private formatFilePath(fullPath: string): string {
     const relativePath = fullPath.split('uploads')[1];
     return `/uploads${relativePath}`.replace(/\\/g, '/');
+  }
+
+  @Get('images/:dateFolder/:filename')
+  async serveImage(
+    @Param('dateFolder') dateFolder: string,
+    @Param('filename') filename: string,
+    @Req() req,
+    @Res() res
+  ) {
+    const imagePath = join(process.cwd(), 'uploads', 'mobilier', 'images', dateFolder, filename);
+    
+    if (!existsSync(imagePath)) {
+      throw new NotFoundException('Image non trouvée');
+    }
+    
+    return res.sendFile(imagePath);
   }
 }

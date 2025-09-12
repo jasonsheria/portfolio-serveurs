@@ -106,9 +106,10 @@ async function bootstrap() {
     whitelist: true,
     transform: true,
   }));
-  // Utiliser le dossier persistant Render pour les fichiers
-  const uploadsPath = '/upload';
-  app.useStaticAssets(uploadsPath, {
+  // Utiliser le dossier 'uploads' du projet pour servir les fichiers statiques
+  const uploadsAbsolutePath = path.join(process.cwd(), 'uploads');
+  console.log(`[STATIC] Serving uploads from: ${uploadsAbsolutePath}`);
+  app.useStaticAssets(uploadsAbsolutePath, {
     prefix: '/uploads', // Ce préfixe doit correspondre à celui utilisé dans pictureUrl
     fallthrough: false, // Pour que les erreurs soient catchées ici
   });
