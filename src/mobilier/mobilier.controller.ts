@@ -189,13 +189,20 @@ export class MobilierController {
     }
   ) {
     try {
+      // Debug: log incoming auth header and user payload for troubleshooting
+      try { console.log('UPDATE.authorization header:', req.headers?.authorization); } catch(e){}
+      try { console.log('UPDATE.req.user:', JSON.stringify(req.user)); } catch(e) { console.log('UPDATE.req.user (raw):', req.user); }
       const data = JSON.parse(dataString);
       const userId = req.user.userId;
       const userType = req.user.type || 'User';
 
       // Vérifier que l'utilisateur est bien le propriétaire
-      const mobilier = await this.mobilierService.findOne(id);
-      if (!mobilier || mobilier.proprietaire.toString() !== userId || mobilier.proprietaireType !== userType) {
+  const mobilier = await this.mobilierService.findOne(id);
+  try { console.log('UPDATE.mobilier.proprietaire (raw):', mobilier?.proprietaire, 'toString:', mobilier?.proprietaire?.toString?.()); } catch(e){}
+      // Allow if the requesting user is the owner (compare ids). Don't fail when token lacks type claim.
+      if (!mobilier || mobilier.proprietaire._id.toString() !== userId) {
+        // audit log to help debugging mismatched ownership/auth issues
+        console.warn(`Unauthorized update attempt on mobilier ${id} by user ${userId}. proprietaire=${mobilier?.proprietaire?._id?.toString()} proprietaireType=${mobilier?.proprietaireType} tokenType=${userType}`);
         throw new BadRequestException('Non autorisé à modifier ce bien');
       }
 
@@ -228,10 +235,16 @@ export class MobilierController {
   async remove(@Param('id') id: string, @Req() req) {
     const userId = req.user.userId;
     const userType = req.user.type || 'User';
-
+    console.log("user ", userId, " type ", userType);
+    console.log("id", id);
+    try { console.log('DELETE.authorization header:', req.headers?.authorization); } catch(e){}
+    try { console.log('DELETE.req.user:', JSON.stringify(req.user)); } catch(e) { console.log('DELETE.req.user (raw):', req.user); }
     // Vérifier que l'utilisateur est bien le propriétaire
     const mobilier = await this.mobilierService.findOne(id);
-    if (!mobilier || mobilier.proprietaire.toString() !== userId || mobilier.proprietaireType !== userType) {
+    console.log("mobilier trouver",mobilier)
+    try { console.log('DELETE.mobilier.proprietaire (raw):', mobilier?.proprietaire, 'toString:', mobilier?.proprietaire?.toString?.()); } catch(e){}
+    if (!mobilier || mobilier.proprietaire._id.toString() !== userId) {
+      console.warn(`Unauthorized delete attempt on mobilier ${id} by user ${userId}. proprietaire=${mobilier?.proprietaire?._id?.toString()} proprietaireType=${mobilier?.proprietaireType} tokenType=${userType}`);
       throw new BadRequestException('Non autorisé à supprimer ce bien');
     }
 
