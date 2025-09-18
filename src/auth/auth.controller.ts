@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import type { Express } from 'express';
+import { multerConfig } from './utils/upload.config';
 
 
 @Controller('auth')
@@ -29,19 +30,20 @@ export class AuthController {
 
 
   @Post('register')
-  @UseInterceptors(FileInterceptor('profileImage'))
-  @HttpCode(HttpStatus.CREATED) // Réponse 201 Created
+  @UseInterceptors(FileInterceptor('profileImage', multerConfig))
+  @HttpCode(HttpStatus.CREATED)
   async register(
-    @Body() registerDto: any,
-    @UploadedFile() profileImage: any // Utilise 'any' pour éviter l'erreur de type
+    @Body() registerDto: RegisterDto,
+    @UploadedFile() profileImage: Express.Multer.File
   ) {
-    console.log('CONTROLLER: profileImage reçu:', !!profileImage, profileImage ? profileImage.originalname : null, '| Taille:', profileImage ? profileImage.size : null);
-    // Générer un token de vérification unique
-    // Enregistrer l'utilisateur avec isVerified: false et le token de vérification
-    await this.authService.register({ ...registerDto, isVerified: false, verificationToken: uuidv4() }, profileImage);
-    // Envoyer l'email de confirmation
-
-    return { message: 'Un email de confirmation a été envoyé. Veuillez vérifier votre boîte de réception.' };
+    const verificationToken = uuidv4();
+    await this.authService.register(
+      { ...registerDto, isVerified: false, verificationToken },
+      profileImage
+    );
+    return { 
+      message: 'Un email de confirmation a été envoyé. Veuillez vérifier votre boîte de réception.'
+    };
   }
 
   @Get('verify-email')
@@ -161,7 +163,7 @@ export class AuthController {
     { name: 'logoFile', maxCount: 1 },
     { name: 'postalCardFile', maxCount: 1 },
     { name: 'companyLogoFile', maxCount: 1 },
-  ]))
+  ], multerConfig))
   async updateProfile(
     @Request() req,
     @Body() updateUserDto: UpdateUserDto,
@@ -175,17 +177,19 @@ export class AuthController {
       companyLogoFile?: Express.Multer.File[],
     }
   ) {
-    this.logger.debug(`updateProfile: req.user = ${JSON.stringify(req.user)}`);
-    this.logger.debug(`Received request to update profile for user ID: ${req.user.userId}`);
-    
+    this.logger.debug(`Mise à jour du profil pour l'utilisateur: ${req.user.userId}`);
 
     try {
       const updatedUser = await this.userService.updateUser(req.user.userId, updateUserDto, files);
-      return { message: 'Profil mis à jour avec succès', user: updatedUser };
+      return { 
+        message: 'Profil mis à jour avec succès',
+        user: updatedUser 
+      };
     } catch (error) {
-      this.logger.error(`Profile update failed for user ID ${req.user.userId}: ${error.message}`, error.stack);
+      this.logger.error(`Échec de mise à jour du profil pour l'utilisateur ${req.user.userId}: ${error.message}`, error.stack);
+      
       if (error instanceof NotFoundException || error instanceof ConflictException) {
-        throw error; // Re-throw known exceptions
+        throw error;
       }
       throw new InternalServerErrorException('Une erreur est survenue lors de la mise à jour du profil.');
     }

@@ -1,10 +1,6 @@
     import { Injectable, Logger } from '@nestjs/common';
-// Assurez-vous que l'import de votre modèle Mongoose est correct.
-// Cela dépend de comment vous avez configuré Mongoose dans votre application NestJS.
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose'; // Assurez-vous d'avoir mongoose installé (npm install mongoose)
-// Importez l'interface/type de votre document Message Mongoose.
-// Adaptez le chemin si nécessaire pour qu'il pointe vers votre fichier message.schema.ts
+import { Model, Types } from 'mongoose';
 import { Message } from '../entity/messages/message.schema';
 // Importez l'interface/type de votre document User si vous en avez besoin pour la vérification d'accès.
 // Adaptez le chemin si nécessaire.
@@ -209,6 +205,33 @@ export class MessagesService {
         } catch (error) {
             this.logger.error('Erreur replyToMessage: ' + error.message, error.stack);
             throw error;
+        }
+    }
+
+    async saveFileMetadata(fileData: {
+        userId: string;
+        originalName: string;
+        filename: string;
+        type: string;
+        path: string;
+        size: number;
+    }) {
+        try {
+            const fileMetadata = new this.messageModel({
+                userId: new Types.ObjectId(fileData.userId),
+                sender: new Types.ObjectId(fileData.userId),
+                originalName: fileData.originalName,
+                filename: fileData.filename,
+                type: fileData.type,
+                path: fileData.path,
+                size: fileData.size,
+                isFile: true,
+                timestamp: new Date()
+            });
+            return await fileMetadata.save();
+        } catch (error) {
+            this.logger.error('Error saving file metadata: ' + error.message, error.stack);
+            throw new Error('Failed to save file metadata');
         }
     }
 

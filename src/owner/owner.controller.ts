@@ -12,14 +12,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { Types } from 'mongoose';
 import { Request } from 'express';
-
-// Étendre l'interface Request pour inclure l'utilisateur
-interface RequestWithUser extends Request {
-  user: {
-    userId: string;
-    email: string;
-  };
-}
+import { RequestWithUser } from '../common/types/request.interface';
 
 // Interface pour les fichiers uploadés
 interface UploadedOwnerFiles {
@@ -90,7 +83,7 @@ export class OwnerController {
       const meta: OwnerMetaDto = JSON.parse(metaString);
       
       // Convertir l'ID utilisateur en ObjectId depuis le token JWT
-      const userId = new Types.ObjectId(req.user.userId);
+  const userId = new Types.ObjectId(req.user.id);
       
       // Formater les chemins de fichiers pour être relatifs à la racine du projet
       const idFilePath = this.formatFilePath(files.idFile[0].path);
@@ -139,14 +132,14 @@ export class OwnerController {
   @Get('check-account')
   @UseGuards(JwtAuthGuard)
   async checkUserAccount(@Req() req: RequestWithUser) {
-    const userId = new Types.ObjectId(req.user.userId);
+  const userId = new Types.ObjectId(req.user.id);
     return this.ownerService.findByUserId(userId);
   }
 
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Req() req: RequestWithUser) {
-    const userId = new Types.ObjectId(req.user.userId);
+  const userId = new Types.ObjectId(req.user.id);
     return this.ownerService.getProfile(userId);
   }
 
@@ -200,7 +193,7 @@ export class OwnerController {
     @Req() req: RequestWithUser
   ) {
     const ownerId = new Types.ObjectId(id);
-    const userId = new Types.ObjectId(req.user.userId);
+  const userId = new Types.ObjectId(req.user.id);
 
     return this.ownerService.activateFreemium(ownerId, userId);
   }
@@ -212,7 +205,7 @@ export class OwnerController {
     @Req() req: RequestWithUser
   ) {
     const ownerId = new Types.ObjectId(id);
-    const userId = new Types.ObjectId(req.user.userId);
+  const userId = new Types.ObjectId(req.user.id);
 
     return this.ownerService.activateCommission(ownerId, userId);
   }

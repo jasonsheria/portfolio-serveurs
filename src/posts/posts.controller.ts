@@ -15,6 +15,8 @@ import {
   Param,  
   Res,
 } from '@nestjs/common';
+import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -32,19 +34,25 @@ export class PostsController {
   @UseInterceptors(
     FilesInterceptor('media', 10, {
       storage: diskStorage({
-        destination: '/upload/posts', // <-- persistent disk for posts
+        destination: (req, file, cb) => {
+          const uploadPath = join(process.cwd(), 'uploads', 'posts');
+          if (!existsSync(uploadPath)) {
+            mkdirSync(uploadPath, { recursive: true });
+          }
+          cb(null, uploadPath);
+        },
         filename: (req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, uniqueSuffix + extname(file.originalname));
         },
       }),
-      limits: { fileSize: 5 * 1024 * 1024 }, 
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
       fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image') || file.mimetype.startsWith('video')) {
-          cb(null, true);
-        } else {
-          cb(null, false);
+        // Vérifier le type de fichier
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|mp4|mpeg|quicktime)$/)) {
+          return cb(new Error('Seuls les fichiers jpg, jpeg, png, gif, mp4, mpeg et mov sont autorisés'), false);
         }
+        cb(null, true);
       },
     })
   )
@@ -133,19 +141,25 @@ export class PostsController {
   @UseInterceptors( 
     FilesInterceptor('media', 10, {
       storage: diskStorage({
-        destination: '/upload/posts', // <-- persistent disk for posts
+        destination: (req, file, cb) => {
+          const uploadPath = join(process.cwd(), 'uploads', 'posts');
+          if (!existsSync(uploadPath)) {
+            mkdirSync(uploadPath, { recursive: true });
+          }
+          cb(null, uploadPath);
+        },
         filename: (req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, uniqueSuffix + extname(file.originalname));
         },
       }),
-      limits: { fileSize: 5 * 1024 * 1024 }, 
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
       fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image') || file.mimetype.startsWith('video')) {
-          cb(null, true);
-        } else {
-          cb(null, false);
+        // Vérifier le type de fichier
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|mp4|mpeg|quicktime)$/)) {
+          return cb(new Error('Seuls les fichiers jpg, jpeg, png, gif, mp4, mpeg et mov sont autorisés'), false);
         }
+        cb(null, true);
       },
     }),
   )

@@ -107,24 +107,22 @@ export class UsersService {
             if (!allowedTypes.includes(file.mimetype)) {
                 throw new NotFoundException('Format de fichier non supporté. Formats acceptés : jpg, jpeg, png, webp');
             }
-            // Vérification de la taille (max 2Mo)
-            const maxSize = 2 * 1024 * 1024; // 2 Mo
+            // Vérification de la taille (max 5Mo)
+            const maxSize = 5 * 1024 * 1024; // 5 Mo
             if (file.size > maxSize) {
-                throw new NotFoundException('La taille de la photo de profil ne doit pas dépasser 2 Mo.');
+                throw new NotFoundException('La taille de la photo de profil ne doit pas dépasser 5 Mo.');
             }
             // Générer un nom de fichier unique
-            const ext = file.originalname.split('.').pop();
-            const fileName = `profile_${Date.now()}_${Math.floor(Math.random()*10000)}.${ext}`;
-            const fs = require('fs');
-            const path = require('path');
-            const profileDir = path.join('/upload', 'profile');
+            const ext = path.extname(file.originalname);
+            const fileName = `profile_${Date.now()}_${Math.floor(Math.random()*10000)}${ext}`;
+            const profileDir = path.join(process.cwd(), 'uploads', 'profiles');
             if (!fs.existsSync(profileDir)) {
                 fs.mkdirSync(profileDir, { recursive: true });
             }
             const filePath = path.join(profileDir, fileName);
             fs.writeFileSync(filePath, file.buffer);
             // Stocker le chemin relatif pour le frontend (à servir en statique)
-            profileUrl = `/uploads/profile/${fileName}`;
+            profileUrl = `/uploads/profiles/${fileName}`;
         } else {
             profileUrl = createUserDto.profileUrl || '';
         }
@@ -221,7 +219,7 @@ export class UsersService {
 
         // Gestion des uploads de fichiers
         const username = userToUpdate.username; // Utiliser le username pour le nom du dossier
-        const userUploadDir = path.join('/upload', 'profile');
+        const userUploadDir = path.join(process.cwd(), 'uploads', 'profiles');
 
         if (!fs.existsSync(userUploadDir)) {
             fs.mkdirSync(userUploadDir, { recursive: true });

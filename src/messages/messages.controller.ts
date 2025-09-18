@@ -1,7 +1,28 @@
-    import { Controller, Get, Post, Body, Param, Patch, Delete, Query } from '@nestjs/common';
+    import { 
+    Controller, 
+    Get, 
+    Post, 
+    Body, 
+    Param, 
+    Patch, 
+    Delete, 
+    Query, 
+    UseInterceptors, 
+    UploadedFile, 
+    BadRequestException,
+    UseGuards,
+    Request,
+    HttpException,
+    InternalServerErrorException
+} from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { botDTO } from '../bot/dto/bot.dto';
 import { BotService } from '../bot/bot.service';
+import { messageFileUploadInterceptor } from './utils/upload.config';
+import { FileTypeValidators } from './utils/file.config';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RequestWithUser } from '../common/types/request.interface';
+import * as fs from 'fs';
 
 /**
  * Controller pour la gestion des messages / notifications utilisés par le front.
@@ -76,5 +97,67 @@ export class MessagesController {
             // Depending on the app, you may persist the reply, send an email, or call the bot service
             await this.messagesService.replyToMessage(id, reply);
             return { message: 'Reply sent' };
+        }
+
+        @Post('upload')
+        @UseGuards(JwtAuthGuard)
+        @UseInterceptors(messageFileUploadInterceptor)
+        async uploadFile(
+            @UploadedFile() file: Express.Multer.File,
+            @Request() req: RequestWithUser
+        ) {
+            try {
+                // Validate file presence
+                if (!file) {
+                    throw new BadRequestException('No file uploaded');
+                }
+
+                // Get and validate file type
+                let fileType = 'unknown';
+                if (FileTypeValidators.isImage(file.originalname)) {
+                    fileType = 'image';
+                } else if (FileTypeValidators.isVideo(file.originalname)) {
+                    fileType = 'video';  
+                } else if (FileTypeValidators.isAudio(file.originalname)) {
+                    fileType = 'audio';
+                } else if (FileTypeValidators.isDocument(file.originalname)) {
+                    fileType = 'document';
+                } else {
+                    throw new BadRequestException('Invalid file type');
+                }
+
+                // Save file metadata to database
+                const fileMetadata = await this.messagesService.saveFileMetadata({
+                    userId: req.user.id, // Using id instead of _id as Document provides id getter
+                    originalName: file.originalname,
+                    filename: file.filename,
+                    type: fileType,
+                    path: file.path,
+                    size: file.size
+                });
+
+                // Return file info including type and path
+                return {
+                    id: fileMetadata._id,
+                    originalName: file.originalname,
+                    filename: file.filename,
+                    type: fileType,
+                    path: file.path,
+                    size: file.size
+                };
+            } catch (error) {
+                // Clean up the file if something goes wrong
+                if (file && file.path) {
+                    try {
+                        fs.unlinkSync(file.path);
+                    } catch (err) {
+                        // Log cleanup error but don't expose to client
+                        console.error('Failed to clean up file:', err);
+                    }
+                }
+                throw error instanceof HttpException 
+                    ? error 
+                    : new InternalServerErrorException('Failed to process file upload');
+            }
         }
 }

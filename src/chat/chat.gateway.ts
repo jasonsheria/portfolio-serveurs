@@ -19,6 +19,9 @@ import { UsersService } from '../users/users.service';
 import { BotService } from "../bot/bot.service"; // Exemple de service de bot
 import { MessageForum } from '../entity/messages/message_forum.schema';
 import { MessageForumService } from '../messages/message_forum.service';
+import { join } from 'path';
+import { writeFileSync } from 'fs';
+import { chatFileConfig } from './utils/file.config';
 // Le port doit correspondre à celui où Socket.IO écoute sur votre backend
 // (souvent le même port que l'API REST si vous utilisez l'adaptateur par défaut)
 @WebSocketGateway({
@@ -475,84 +478,89 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             client.emit('error', { message: 'Seuls les administrateurs peuvent envoyer des fichiers dans ce chat.' });
             return;
         }
-        if (!data || !data.content || !data.type || !data.filename) {
+
+        // Validation des données
+        if (!data?.content || !data?.type || !data?.filename) {
             this.logger.warn(`[adminChatRoomFile] Fichier ou données invalides reçues du client ${client.id}`);
             client.emit('error', { message: 'Fichier ou données invalides.' });
             return;
         }
 
-        let fileContent = data.content;
-        let isCompressed = false;
-        let filename = data.filename;
-        // Compression uniquement pour les fichiers non médias
-        if (data.type === 'file') {
-            try {
-                const buffer = Buffer.from(data.content.split(',')[1] || data.content, 'base64');
-                const zlib = require('zlib');
-                const compressed = zlib.gzipSync(buffer);
-                fileContent = 'data:application/gzip;base64,' + compressed.toString('base64');
-                isCompressed = true;
-                filename = data.filename + '.gz';
-            } catch (err) {
-                this.logger.warn(`[adminChatRoomFile] Compression échouée pour ${data.filename}: ${err.message}`);
-                fileContent = data.content;
-                isCompressed = false;
-                filename = data.filename;
-            }
-        }
-        // Pour les vidéos, images, audio : ne rien modifier, mais transmettre la taille si possible
-        // (le frontend doit envoyer size dans data)
-        // sauverager le fichier dans uploads/admin-chatroom/
-        const fs = require('fs');
-        const path = require('path');
-        const uploadDir = path.join(process.cwd(), 'uploads','profile');
-        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-        const ext = filename.split('.').pop();
-        const newName = `${Date.now()}_${Math.floor(Math.random() * 10000)}.${ext}`;
-        const filePathAbs = path.join(uploadDir, newName);
+        // Validation du fichier et préparation
+    let fileBuffer = Buffer.from(data.content.split(',')[1] || data.content, 'base64');
         try {
-            // Décoder le base64 et sauvegarder le fichier
-            let base64 = fileContent;
-            if (base64.startsWith('data:')) base64 = base64.split(',')[1];
-            fs.writeFileSync(filePathAbs, Buffer.from(base64, 'base64'));
-            console.log(`[ADMIN CHATROOM] Fichier sauvegardé: ${filePathAbs}`);
-            // sauvegarder le chemin relatif pour l'envoyer au frontend
-            fileContent = `/uploads/profile/${newName}`; // chemin relatif
-            // On peut aussi envoyer le chemin complet si nécessaire
-            console.log(`[ADMIN CHATROOM] Fichier sauvegardé: ${filePathAbs}`);
-            // Optionnel : sauvegarder le message en base de données si nécessaire
-            await this.messageForumService.createMessage({
-                user: user._id,
-                content: fileContent, // chemin relatif ou absolu
-                type: data.type,
-                filename: filename,
-                date: new Date(),
-                isCompressed: isCompressed || false, // Indique si le fichier est compressé
-                size: data.size || null // Ajout de la taille pour tous les types
+            chatFileConfig.validateFile({
+                size: fileBuffer.length,
+                originalname: data.filename,
+                mimetype: data.type.includes('file') ? 'application/pdf' : `${data.type}/${data.filename.split('.').pop()}`
             });
         } catch (err) {
-            console.log(`[ADMIN CHATROOM] Erreur lors de l'écriture du fichier admin chatroom: ${err.message}`);
-            client.emit('error', { message: "Erreur lors de l'enregistrement du fichier dans le chat admin." });
+            this.logger.warn(`[adminChatRoomFile] Validation échouée pour ${data.filename}: ${err.message}`);
+            client.emit('error', { message: err.message });
             return;
         }
-        // Diffuser à tous les membres de la room 'admin-chatroom'
-        this.server.to('admin-chatroom').emit('adminChatRoomFile', {
-            from: {
-                id: user._id,
-                name: (user as any).username || '',
-                email: user.email || '',
-                profileUrl: user.profileUrl || '',
-                isGoogleAuth: user.isGoogleAuth || false,
-                isAdmin: user.isAdmin || false
-            },
-            type: data.type,
-            content: fileContent, // base64 ou base64 compressé
-            filename: filename,
-            date: new Date().toISOString(),
-            tempId: data.tempId || null, // Ajout du tempId pour lier l'optimistic UI
-            isCompressed,
-            size: data.size || null // Ajout de la taille pour tous les types
-        });
+
+        // Compression pour les documents
+        let isCompressed = false;
+        if (data.type === 'file') {
+            try {
+                const zlib = require('zlib');
+                const compressedBuffer = zlib.gzipSync(fileBuffer);
+                fileBuffer = compressedBuffer;
+                isCompressed = true;
+                data.filename = `${data.filename}.gz`;
+            } catch (err) {
+                this.logger.warn(`[adminChatRoomFile] Compression échouée pour ${data.filename}: ${err.message}`);
+                // Continue avec le fichier non compressé
+            }
+        }
+
+        // Sauvegarde du fichier
+        const uploadDir = chatFileConfig.getUploadPath(data.type);
+        const newFilename = chatFileConfig.generateFilename(data.filename);
+        const filePathAbs = join(uploadDir, newFilename);
+
+        try {
+            writeFileSync(filePathAbs, fileBuffer);
+            this.logger.log(`[ADMIN CHATROOM] Fichier sauvegardé: ${filePathAbs}`);
+
+            // Chemin relatif pour la base de données et le frontend
+            const relativePath = `/uploads/chat/${data.type}/${newFilename}`;
+
+            // Sauvegarde en base de données
+            await this.messageForumService.createMessage({
+                user: user._id,
+                content: relativePath,
+                type: data.type,
+                filename: data.filename,
+                date: new Date(),
+                isCompressed,
+                size: fileBuffer.length
+            });
+
+            // Diffusion à tous les membres de la room
+            this.server.to('admin-chatroom').emit('adminChatRoomFile', {
+                from: {
+                    id: user._id,
+                    name: (user as any).username || '',
+                    email: user.email || '',
+                    profileUrl: user.profileUrl || '',
+                    isGoogleAuth: user.isGoogleAuth || false,
+                    isAdmin: user.isAdmin || false
+                },
+                type: data.type,
+                content: relativePath,
+                filename: data.filename,
+                date: new Date().toISOString(),
+                tempId: data.tempId || null,
+                isCompressed,
+                size: fileBuffer.length
+            });
+        } catch (err) {
+            this.logger.error(`[ADMIN CHATROOM] Erreur lors de l'enregistrement: ${err.message}`);
+            client.emit('error', { message: "Erreur lors de l'enregistrement du fichier." });
+            return;
+        }
     }
 
     // --- Forum Public ---
@@ -617,10 +625,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
                     type: "text",
                     date: new Date(),
                 });
-                client.emit('error', { message: "Erreur lors de l'enregistrement du message forum en base." });
-                return;
             }
             catch (err) {
+                this.logger.error(`[FORUM] Erreur lors de l'enregistrement du message forum en base: ${err.message}`);
                 client.emit('error', { message: "Erreur lors de l'enregistrement du message forum en base." });
                 return;
             }

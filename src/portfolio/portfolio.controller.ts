@@ -34,16 +34,23 @@ export class PortfolioController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
-      destination: '/upload/portfolio', // <-- persistent disk for portfolio uploads
+      destination: (req, file, cb) => {
+        const uploadPath = path.join(process.cwd(), 'uploads', 'portfolio');
+        if (!fs.existsSync(uploadPath)) {
+          fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+      },
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        const filename = `portfolio_${Date.now()}${ext}`;
-        cb(null, filename);
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, `portfolio-${uniqueSuffix}${path.extname(file.originalname)}`);
       },
     }),
     fileFilter: (req, file, cb) => {
-      if (file.mimetype.startsWith('image/')) cb(null, true);
-      else cb(null, false);
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+        return cb(new Error('Seuls les fichiers jpg, jpeg, png et gif sont autorisés'), false);
+      }
+      cb(null, true);
     },
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
   }))

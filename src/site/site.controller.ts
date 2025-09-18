@@ -16,21 +16,22 @@ export class SiteController {
   @UseInterceptors(FileInterceptor('service_image', {
     storage: diskStorage({
       destination: (req, file, cb) => {
-        const uploadPath = path.join('/upload', 'services');
+        const uploadPath = path.join(process.cwd(), 'uploads', 'services');
         if (!fs.existsSync(uploadPath)) {
           fs.mkdirSync(uploadPath, { recursive: true });
         }
         cb(null, uploadPath);
       },
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        const filename = `service_${Date.now()}_${uuidv4()}${ext}`;
-        cb(null, filename);
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, `service-${uniqueSuffix}${path.extname(file.originalname)}`);
       },
     }),
     fileFilter: (req, file, cb) => {
-      if (file.mimetype.startsWith('image/')) cb(null, true);
-      else cb(null, false);
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+        return cb(new Error('Seuls les fichiers jpg, jpeg, png et gif sont autorisés'), false);
+      }
+      cb(null, true);
     },
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
   }))

@@ -7,6 +7,8 @@ import { AuthService } from '../auth/auth.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CurrentUser } from './current-user.decorator';
 import { diskStorage } from 'multer';
+import { join, extname } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import * as path from 'path';
 
 @Controller('users')
@@ -22,19 +24,24 @@ export class UsersController {
   @UseInterceptors(FileInterceptor('profileFile', {
     storage: diskStorage({
       destination: (req, file, cb) => {
-        const uploadPath = path.join('/upload', 'profiles');
-        const fs = require('fs');
-        if (!fs.existsSync(uploadPath)) {
-          fs.mkdirSync(uploadPath, { recursive: true });
+        const uploadPath = path.join(process.cwd(), 'uploads', 'profiles');
+        if (!existsSync(uploadPath)) {
+          mkdirSync(uploadPath, { recursive: true });
         }
         cb(null, uploadPath);
       },
       filename: (req, file, cb) => {
-        const ext = require('path').extname(file.originalname);
-        const name = require('path').basename(file.originalname, ext);
-        cb(null, `${name}-${Date.now()}${ext}`);
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, `profile-${uniqueSuffix}${extname(file.originalname)}`);
       },
     }),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+        return cb(new Error('Seuls les fichiers jpg, jpeg, png et gif sont autorisés'), false);
+      }
+      cb(null, true);
+    },
   }))
   async updateProfile(
     @Param('id') id: string,
