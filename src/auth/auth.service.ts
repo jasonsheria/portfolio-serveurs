@@ -76,7 +76,7 @@ export class AuthService {
         const ext = profileImage.originalname.split('.').pop();
         const fileName = `profile_${Date.now()}_${uuidv4()}.${ext}`; // Utiliser UUID pour plus d'unicité
         // Assurez-vous que ce chemin est correct par rapport à la racine de votre projet NestJS
-         const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'profile');
+         const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'profiles');
         // --- Fin du chemin de sauvegarde ---
         // Créer le répertoire s'il n'existe pas
         if (!fs.existsSync(uploadDir)) {
@@ -90,7 +90,7 @@ export class AuthService {
 
         // --- URL publique alignée avec main.ts ---
         // L'URL d'accès public doit correspondre au préfixe statique défini dans main.ts
-        profileUrl = `/uploads/profile/${fileName}`;
+  profileUrl = `/uploads/profiles/${fileName}`;
         this.logger.log(`URL publique de l'image: ${profileUrl}`);
         // --- Fin de l'URL publique ---
 

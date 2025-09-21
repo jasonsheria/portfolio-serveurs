@@ -177,10 +177,11 @@ export class AuthController {
       companyLogoFile?: Express.Multer.File[],
     }
   ) {
-    this.logger.debug(`Mise à jour du profil pour l'utilisateur: ${req.user.userId}`);
+    const userId = req.user?.id || req.user?.userId || req.user?._id;
+    this.logger.debug(`Mise à jour du profil pour l'utilisateur: ${userId}`);
 
     try {
-      const updatedUser = await this.userService.updateUser(req.user.userId, updateUserDto, files);
+      const updatedUser = await this.userService.updateUser(String(userId), updateUserDto, files);
       return { 
         message: 'Profil mis à jour avec succès',
         user: updatedUser 

@@ -232,33 +232,56 @@ export class UsersService {
         const processFile = async (fileField: keyof UpdateUserDto, fileArray?: Express.Multer.File[], entityFieldOverride?: string) => {
             if (fileArray && fileArray[0]) {
                 const file = fileArray[0];
+
+                // If multer.diskStorage was used, file.path exists and file already saved to disk
+                if (file.path) {
+                    try {
+                        const rel = path.relative(process.cwd(), file.path).replace(/\\/g, '/');
+                        const publicPath = `/${rel}`; // e.g. /uploads/profiles/xxx-file.png
+                        if (entityFieldOverride) {
+                            (userToUpdate as any)[entityFieldOverride] = publicPath;
+                        } else {
+                            (updateUserDto as any)[fileField] = publicPath;
+                        }
+                        this.logger.log(`Detected diskStorage file for ${fileField}, stored path ${publicPath} for user ${id}`);
+                    } catch (err) {
+                        this.logger.error(`Error processing diskStorage file for ${fileField}: ${err.message}`, err.stack);
+                    }
+                    return;
+                }
+
+                // Otherwise, handle files provided in memory via buffer
                 if (!file.buffer || file.buffer.length === 0) {
                     this.logger.error(`File buffer is empty for field ${fileField} (user ${id})`);
                     return;
                 }
+
                 const ext = file.originalname.split('.').pop();
                 const fileName = `${fileField}_${Date.now()}.${ext}`;
-                const filePath = path.join(userUploadDir, fileName);
+                // choose subfolder based on fileField
+                const uploadType = (fileField === 'cvFile') ? 'cv' : (fileField === 'logoFile' || fileField === 'companyLogoFile') ? 'logos' : (fileField === 'postalCardFile') ? 'postalCards' : 'profiles';
+                const fileDir = path.join(process.cwd(), 'uploads', uploadType);
+                if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
+                const filePath = path.join(fileDir, fileName);
 
                 try {
                     let finalBuffer = file.buffer;
-                    // Suppression du fond pour les images de profil
                     if (fileField === 'profileImage1' || fileField === 'profileImage2' || fileField === 'profileImage3') {
                         const apiKey = process.env.REMOVE_BG_API_KEY;
                         if (apiKey) {
-                          try {
-                            finalBuffer = await removeBackground(file.buffer, apiKey);
-                          } catch (err) {
-                            this.logger.error(`remove.bg failed for ${fileField}: ${err.message}`);
-                            // fallback: garder l'image originale
-                          }
+                            try {
+                                finalBuffer = await removeBackground(file.buffer, apiKey);
+                            } catch (err) {
+                                this.logger.error(`remove.bg failed for ${fileField}: ${err.message}`);
+                            }
                         }
                     }
                     await fs.promises.writeFile(filePath, finalBuffer);
+                    const storedPath = `/uploads/${uploadType}/${fileName}`;
                     if (entityFieldOverride) {
-                        (userToUpdate as any)[entityFieldOverride] = `/uploads/profile/${fileName}`;
+                        (userToUpdate as any)[entityFieldOverride] = storedPath;
                     } else {
-                        (updateUserDto as any)[fileField] = `/uploads/profile/${fileName}`;
+                        (updateUserDto as any)[fileField] = storedPath;
                     }
                     this.logger.log(`File ${fileName} saved to ${filePath} for user ${id}`);
                 } catch (error) {
