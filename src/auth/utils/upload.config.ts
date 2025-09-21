@@ -12,7 +12,7 @@ export const multerConfig = {
       if (file.fieldname.includes('Logo')) uploadType = 'logos';
       if (file.fieldname === 'postalCardFile') uploadType = 'postalCards';
       
-      const uploadPath = join(process.cwd(), 'uploads', 'users', uploadType);
+      const uploadPath = join(process.cwd(), 'uploads', uploadType);
       if (!existsSync(uploadPath)) {
         mkdirSync(uploadPath, { recursive: true });
       }
