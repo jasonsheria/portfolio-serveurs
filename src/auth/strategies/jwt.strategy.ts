@@ -30,6 +30,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // if (!user) {
     //   throw new UnauthorizedException('Token invalide ou utilisateur non trouvé.');
     // }
-    return { userId, ...payload };
+    // normalize returned object so downstream code can use either `id`, `userId` or `_id`
+    return { id: userId, userId, _id: userId, ...payload };
   }
 }

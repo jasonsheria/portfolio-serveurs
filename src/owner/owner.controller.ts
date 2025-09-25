@@ -132,8 +132,37 @@ export class OwnerController {
   @Get('check-account')
   @UseGuards(JwtAuthGuard)
   async checkUserAccount(@Req() req: RequestWithUser) {
-  const userId = new Types.ObjectId(req.user.id);
-    return this.ownerService.findByUserId(userId);
+  // Diagnostic logging to help understand why lookups might fail
+  try {
+    console.log('checkUserAccount: req.user =', req.user);
+    const rawId = req.user?.id || req.user?.userId || req.user?._id;
+    console.log('checkUserAccount: resolved rawId =', rawId);
+    const userId = new Types.ObjectId(String(rawId));
+    console.log('checkUserAccount: using ObjectId =', userId.toString());
+    const result = await this.ownerService.findByUserId(userId);
+    console.log('checkUserAccount: ownerService result =', result && (result.hasAccount ? 'HAS_ACCOUNT' : 'NO_ACCOUNT'));
+    return result;
+  } catch (err) {
+    console.error('checkUserAccount: error resolving userId', err);
+    throw err;
+  }
+  }
+
+  // Debug endpoint: returns raw owner documents that reference the authenticated user
+  @Get('debug-account')
+  @UseGuards(JwtAuthGuard)
+  async debugAccount(@Req() req: RequestWithUser) {
+    try {
+      const rawId = req.user?.id || req.user?.userId || req.user?._id;
+      const userId = new Types.ObjectId(String(rawId));
+      console.log('debugAccount: resolved userId=', String(userId));
+      const docs = await this.ownerService.findAllByUserId(userId);
+      console.log('debugAccount: found docs count=', (docs && docs.length) || 0);
+      return { count: (docs && docs.length) || 0, docs };
+    } catch (err) {
+      console.error('debugAccount: error', err);
+      throw err;
+    }
   }
 
   @Get('profile')

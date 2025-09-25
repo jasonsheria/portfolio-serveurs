@@ -37,8 +37,23 @@ export class OwnerService {
     }
   }
   async findByUserId(userId: Types.ObjectId) {
+    
     try {
-      const owner = await this.ownerModel.findOne({ user: userId }).populate('user');
+      console.log('OwnerService.findByUserId: searching for userId=', String(userId));
+      let owner = await this.ownerModel.findOne({ user: userId }).populate('user');
+      console.log('OwnerService.findByUserId: initial query by ObjectId result=', owner ? 'FOUND' : 'NOT FOUND');
+      // Fallback: sometimes user is stored as string or different field; try string match
+      if (!owner) {
+        console.log('OwnerService.findByUserId: trying fallback string match');
+        owner = await this.ownerModel.findOne({ 'user': String(userId) }).populate('user');
+        console.log('OwnerService.findByUserId: fallback string match result=', owner ? 'FOUND' : 'NOT FOUND');
+      }
+      // Another fallback: some records might have nested user._id
+      if (!owner) {
+        console.log('OwnerService.findByUserId: trying fallback by nested user._id');
+        owner = await this.ownerModel.findOne({ 'user._id': userId }).populate('user');
+        console.log('OwnerService.findByUserId: nested match result=', owner ? 'FOUND' : 'NOT FOUND');
+      }
       if (!owner) {
         return { hasAccount: false };
       }
@@ -143,6 +158,16 @@ export class OwnerService {
 
   async findAll() {
     return await this.ownerModel.find().populate('user');
+  }
+
+  // Debug helper: return all owner records that reference the given user id
+  async findAllByUserId(userId: Types.ObjectId) {
+    try {
+      const list = await this.ownerModel.find({ user: userId }).populate('user').lean();
+      return list;
+    } catch (error) {
+      throw new BadRequestException('Erreur lors de la récupération des propriétaires pour l’utilisateur');
+    }
   }
 
   async findOne(id: string) {
