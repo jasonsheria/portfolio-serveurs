@@ -28,6 +28,7 @@ import { SuggestionModule } from './suggestion';
 import { ProjectModule } from './project/project.module'; // Importer ProjectModule
 import { ProjetModule } from './projet/projet.module'; // Importer ProjetModule
 import { NotificationsModule } from './notifications/notifications.module';
+import { EvenementModule } from './evenement/evenement.module';
 import { UploadController } from './upload/upload.controller';
 import { VisitModule } from './visit/visit.module'; // Ajout du module de tracking visite
 import { ServiceModule } from './service/service.module'; // Importer le module de service
@@ -67,6 +68,7 @@ import { OwnerModule } from './owner/owner.module';
     TemplateModule, // Ajouté pour activer les routes template
     SuggestionModule,
   NotificationsModule,
+  EvenementModule,
     ProjectModule, // Ajouté ici pour activer les routes projet
     ProjetModule, // Ajouté ici pour activer les routes projet
     VisitModule, // Ajouté ici pour activer le tracking des visites
