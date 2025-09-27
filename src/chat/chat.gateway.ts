@@ -443,6 +443,21 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         this.server.emit('userLogout', { userId });
     }
 
+    // Emit a notification payload to all connected sockets of a given userId
+    emitNotificationToUser(userId: string, notification: any) {
+        if (!userId) return;
+        try {
+            this.logger.log(`[SOCKET] Emitting notification to userId=${userId}`);
+            const sockets = Array.from(this.userSocketMap.get(userId) || []);
+            sockets.forEach(socketId => {
+                // Emit the notification event directly to the socket id
+                this.server.to(socketId).emit('notification', notification);
+            });
+        } catch (err) {
+            this.logger.error(`[SOCKET] Error emitting notification to ${userId}: ${err?.message || err}`);
+        }
+    }
+
     @SubscribeMessage('identify')
    async handleIdentify(
         @MessageBody() data: { userId: string },
