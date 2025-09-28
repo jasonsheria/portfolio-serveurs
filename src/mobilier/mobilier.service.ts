@@ -75,6 +75,17 @@ export class MobilierService {
     };
   }
 
+  /**
+   * Return all mobilier items as a plain array (no pagination).
+   * This is a convenience used by lightweight frontends that expect an array.
+   */
+  async findAllRaw(query: any = {}) {
+    // Ask the paginated findAll to return a large page so we get all items.
+    const q = { ...query, page: 1, limit: 1000000 };
+    const res = await this.findAll(q);
+    return res.data || [];
+  }
+
   async findByProprietaire(proprietaireId: string, type: string, query: any) {
     const {
       page = 1,

@@ -118,6 +118,13 @@ export class MobilierController {
     return this.mobilierService.findAll(query);
   }
 
+  // Lightweight endpoint returning all mobiliers as an array (no pagination)
+  // Useful for simple frontends that request /api/mobilier/all
+  @Get('all')
+  async findAllRaw(@Query() query: any) {
+    return this.mobilierService.findAllRaw(query);
+  }
+
   @Get('owner/:ownerId')
   @UseGuards(JwtAuthGuard)
   async findByOwner(@Param('ownerId') ownerId: string, @Query() query: any) {
