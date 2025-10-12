@@ -97,14 +97,26 @@ export class MobilierController {
         documents: files.documents?.map(file => this.formatFilePath(file.path)) || []
       };
 
-      return this.mobilierService.create({
+      // If the client provided an agentId, convert it to ObjectId and store under `agent`
+      const createPayload: any = {
         ...data,
         proprietaire: new Types.ObjectId(userId),
         proprietaireType: userType,
         images: formattedFiles.images,
         videos: formattedFiles.videos,
         documents: formattedFiles.documents
-      });
+      };
+
+      if (data && data.agentId) {
+        try {
+          createPayload.agent = new Types.ObjectId(data.agentId);
+        } catch (e) {
+          // If conversion fails, ignore the agent field rather than crashing
+          console.warn('Invalid agentId provided, ignoring agent field', data.agentId);
+        }
+      }
+
+      return this.mobilierService.create(createPayload);
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new BadRequestException('Format de données invalide');
@@ -221,12 +233,26 @@ export class MobilierController {
       };
 
       // Mettre à jour avec les anciennes et nouvelles images
-      const updateData = {
+      const updateData: any = {
         ...data,
         images: [...(data.keepImages || []), ...newFiles.images],
         videos: [...(data.keepVideos || []), ...newFiles.videos],
         documents: [...(data.keepDocuments || []), ...newFiles.documents]
       };
+
+      // If client provided agentId in the data, convert it to ObjectId. Allow clearing the agent when an empty string or null is provided.
+      if (Object.prototype.hasOwnProperty.call(data, 'agentId')) {
+        const rawAgentId = data.agentId;
+        if (rawAgentId === null || rawAgentId === '') {
+          updateData.agent = null;
+        } else {
+          try {
+            updateData.agent = new Types.ObjectId(rawAgentId);
+          } catch (e) {
+            console.warn('Invalid agentId provided in update, ignoring agent field', rawAgentId);
+          }
+        }
+      }
 
       return this.mobilierService.update(id, updateData);
     } catch (error) {

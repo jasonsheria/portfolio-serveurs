@@ -133,6 +133,9 @@ export class Mobilier extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Site' })
   site: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'Agent', required: false })
+  agent?: Types.ObjectId; // Agent assigned to this property (nullable)
+
   // Conditions de location/vente
   @Prop()
   garantieLocative: number;
