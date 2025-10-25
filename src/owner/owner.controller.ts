@@ -47,13 +47,13 @@ export class OwnerController {
         if (!existsSync(baseUploadPath)) {
           mkdirSync(baseUploadPath, { recursive: true });
         }
-        
+
         // Créer un dossier pour cet utilisateur
         const userUploadPath = join(baseUploadPath, new Date().toISOString().split('T')[0]);
         if (!existsSync(userUploadPath)) {
           mkdirSync(userUploadPath, { recursive: true });
         }
-        
+
         cb(null, userUploadPath);
       },
       filename: (req, file, cb) => {
@@ -80,25 +80,50 @@ export class OwnerController {
   ) {
     try {
       // Parser les métadonnées
-      const meta: OwnerMetaDto = JSON.parse(metaString);
-      
+      let meta: OwnerMetaDto;
+      try {
+        meta = JSON.parse(metaString);
+      } catch (e) {
+        throw new BadRequestException('Meta JSON invalide ou manquant');
+      }
+
       // Convertir l'ID utilisateur en ObjectId depuis le token JWT
-  const userId = new Types.ObjectId(req.user.id);
-      
+      const userId = new Types.ObjectId(req.user.id);
+
+      // Validate files presence
+      if (!files || !files.idFile || files.idFile.length === 0) {
+        throw new BadRequestException('Le fichier d\'identité (idFile) est requis');
+      }
+
       // Formater les chemins de fichiers pour être relatifs à la racine du projet
       const idFilePath = this.formatFilePath(files.idFile[0].path);
-      const propertyTitlePaths = files.propertyTitle.map(file => 
+      const propertyTitlePaths = (files.propertyTitle || []).map(file =>
         this.formatFilePath(file.path)
       );
-      
+
       // Créer l'objet owner avec la référence user
+      // Validate required meta fields and provide sensible defaults
+      if (!meta || !meta.form) {
+        throw new BadRequestException('Données meta manquantes');
+      }
+      const form = meta.form;
+      if (!form.address) {
+        throw new BadRequestException('Adresse manquante dans les données du propriétaire');
+      }
+      if (!meta.types || !Array.isArray(meta.types) || meta.types.length === 0) {
+        throw new BadRequestException('Types de propriété manquants');
+      }
+
       const createOwnerDto: CreateOwnerDto = {
-        ...meta.form,
+        ...form,
         types: meta.types,
         user: userId,  // Référence à l'utilisateur
         idFilePath,
-        propertyTitlePaths
-      };
+        propertyTitlePaths,
+        subscriptionEndDate: meta.subscriptionEndDate,
+        // subscriptionType is required by the schema; use provided value or default to 'freemium'
+        subscriptionType: meta.subscriptionType || 'freemium'
+      } as any;
 
       // Créer le propriétaire
       const owner = await this.ownerService.create(createOwnerDto);
@@ -108,20 +133,28 @@ export class OwnerController {
         owner
       };
     } catch (error) {
-      // Supprimer les fichiers en cas d'erreur
-      if (files.idFile) {
-        unlinkSync(files.idFile[0].path);
-      }
-      if (files.propertyTitle) {
-        files.propertyTitle.forEach(file => unlinkSync(file.path));
+      // Supprimer les fichiers en cas d'erreur (si présents)
+      try {
+        if (files?.idFile && files.idFile[0] && files.idFile[0].path && existsSync(files.idFile[0].path)) {
+          unlinkSync(files.idFile[0].path);
+        }
+        if (files?.propertyTitle && files.propertyTitle.length) {
+          files.propertyTitle.forEach(file => {
+            if (file && file.path && existsSync(file.path)) unlinkSync(file.path);
+          });
+        }
+      } catch (e) {
+        // ignore cleanup errors but log
+        console.warn('Error cleaning up uploaded files', e);
       }
 
       // Gestion spécifique des erreurs
       if (error instanceof BadRequestException) {
         throw error; // Renvoi de l'erreur de validation telle quelle
-      } else if (error.code === 11000) {
+      } else if (error && (error as any).code === 11000) {
         throw new ConflictException('Un owner avec cet email existe déjà');
       } else {
+        console.error('owner.create error', error);
         throw new InternalServerErrorException(
           'Une erreur est survenue lors de la création de l\'owner'
         );
@@ -132,20 +165,20 @@ export class OwnerController {
   @Get('check-account')
   @UseGuards(JwtAuthGuard)
   async checkUserAccount(@Req() req: RequestWithUser) {
-  // Diagnostic logging to help understand why lookups might fail
-  try {
-    console.log('checkUserAccount: req.user =', req.user);
-    const rawId = req.user?.id || req.user?.userId || req.user?._id;
-    console.log('checkUserAccount: resolved rawId =', rawId);
-    const userId = new Types.ObjectId(String(rawId));
-    console.log('checkUserAccount: using ObjectId =', userId.toString());
-    const result = await this.ownerService.findByUserId(userId);
-    console.log('checkUserAccount: ownerService result =', result && (result.hasAccount ? 'HAS_ACCOUNT' : 'NO_ACCOUNT'));
-    return result;
-  } catch (err) {
-    console.error('checkUserAccount: error resolving userId', err);
-    throw err;
-  }
+    // Diagnostic logging to help understand why lookups might fail
+    try {
+      console.log('checkUserAccount: req.user =', req.user);
+      const rawId = req.user?.id || req.user?.userId || req.user?._id;
+      console.log('checkUserAccount: resolved rawId =', rawId);
+      const userId = new Types.ObjectId(String(rawId));
+      console.log('checkUserAccount: using ObjectId =', userId.toString());
+      const result = await this.ownerService.findByUserId(userId);
+      console.log('checkUserAccount: ownerService result =', result && (result.hasAccount ? 'HAS_ACCOUNT' : 'NO_ACCOUNT'));
+      return result;
+    } catch (err) {
+      console.error('checkUserAccount: error resolving userId', err);
+      throw err;
+    }
   }
 
   // Debug endpoint: returns raw owner documents that reference the authenticated user
@@ -168,7 +201,7 @@ export class OwnerController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Req() req: RequestWithUser) {
-  const userId = new Types.ObjectId(req.user.id);
+    const userId = new Types.ObjectId(req.user.id);
     return this.ownerService.getProfile(userId);
   }
 
@@ -182,7 +215,7 @@ export class OwnerController {
     try {
       console.log("Route /api/owner/:id appelée");
       console.log("ID reçu:", id);
-      
+
       // Essayer d'abord de trouver par ID de propriétaire
       try {
         const result = await this.ownerService.findOne(id);
@@ -222,7 +255,7 @@ export class OwnerController {
     @Req() req: RequestWithUser
   ) {
     const ownerId = new Types.ObjectId(id);
-  const userId = new Types.ObjectId(req.user.id);
+    const userId = new Types.ObjectId(req.user.id);
 
     return this.ownerService.activateFreemium(ownerId, userId);
   }
@@ -234,7 +267,7 @@ export class OwnerController {
     @Req() req: RequestWithUser
   ) {
     const ownerId = new Types.ObjectId(id);
-  const userId = new Types.ObjectId(req.user.id);
+    const userId = new Types.ObjectId(req.user.id);
 
     return this.ownerService.activateCommission(ownerId, userId);
   }

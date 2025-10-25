@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsArray, IsNotEmpty, IsMongoId } from 'class-validator';
+import { IsString, IsEmail, IsArray, IsNotEmpty, IsMongoId, IsDate, IsOptional } from 'class-validator';
 import { Types } from 'mongoose';
 
 export class CreateOwnerDto {
@@ -39,17 +39,28 @@ export class CreateOwnerDto {
 
   @IsMongoId()
   user: Types.ObjectId;
+
+  @IsOptional()
+  @IsDate()
+  subscriptionEndDate?: Date;
+
+  // Optional - set by server if not provided
+  @IsOptional()
+  @IsString()
+  subscriptionType?: string;
 }
 
 export interface OwnerMetaDto {
   types: string[];
   form: {
     nom: string;
-  postnom: string;
+    postnom: string;
     prenom: string;
     email: string;
     phone: string;
     address: string;
   };
   propTitleFiles: string[];
+  subscriptionEndDate?: Date;
+  subscriptionType?: 'freemium' | 'monthly' | 'commission';
 }

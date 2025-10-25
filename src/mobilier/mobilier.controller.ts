@@ -55,25 +55,33 @@ export class MobilierController {
       }
     }),
     fileFilter: (req, file, cb) => {
-      if (file.fieldname === 'images') {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-          return cb(new Error('Seules les images jpg, jpeg et png sont autorisées'), false);
+      // Relaxed checks: images must start with image/, videos with video/, documents pdf
+      try {
+        if (file.fieldname === 'images') {
+          if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+            return cb(new Error('Seules les images (jpg, jpeg, png...) sont autorisées'), false);
+          }
+        } else if (file.fieldname === 'videos') {
+          if (!file.mimetype || !file.mimetype.startsWith('video/')) {
+            return cb(new Error('Seules les vidéos (mp4, webm, mov, ...) sont autorisées'), false);
+          }
+        } else if (file.fieldname === 'documents') {
+          if (!file.mimetype || !file.mimetype.match(/\/(pdf)$/)) {
+            return cb(new Error('Seuls les documents PDF sont autorisés'), false);
+          }
         }
-      } else if (file.fieldname === 'videos') {
-        if (!file.mimetype.match(/\/(mp4|mpeg|quicktime)$/)) {
-          return cb(new Error('Seules les vidéos mp4, mpeg et mov sont autorisées'), false);
+
+        // Optional size check if multer provides size
+        if (typeof file.size === 'number' && file.size > 20 * 1024 * 1024) { // 20MB max server-side
+          return cb(new Error('La taille du fichier ne doit pas dépasser 20MB'), false);
         }
-      } else if (file.fieldname === 'documents') {
-        if (!file.mimetype.match(/\/(pdf)$/)) {
-          return cb(new Error('Seuls les documents PDF sont autorisés'), false);
-        }
+
+        cb(null, true);
+      } catch (e) {
+        // fallback to accepting the file so the request can be inspected
+        console.warn('fileFilter error', e);
+        cb(null, true);
       }
-      
-      if (file.size > 10 * 1024 * 1024) { // 10MB max
-        return cb(new Error('La taille du fichier ne doit pas dépasser 10MB'), false);
-      }
-      
-      cb(null, true);
     }
   }))
   async create(
@@ -86,6 +94,9 @@ export class MobilierController {
     }
   ) {
     try {
+      // Debug: log incoming files structure to help diagnose missing uploads
+      try { console.log('CREATE.received files keys:', Object.keys(files || {})); } catch(e){}
+      try { console.log('CREATE.files.images count:', (files.images||[]).length, 'videos count:', (files.videos||[]).length, 'documents count:', (files.documents||[]).length); } catch(e){}
       const data = JSON.parse(dataString);
       const userId = req.user.userId;
       const userType = req.user.type || 'User';
@@ -96,6 +107,8 @@ export class MobilierController {
         videos: files.videos?.map(file => this.formatFilePath(file.path)) || [],
         documents: files.documents?.map(file => this.formatFilePath(file.path)) || []
       };
+
+      try { console.log('CREATE.formattedFiles:', formattedFiles); } catch(e){}
 
       // If the client provided an agentId, convert it to ObjectId and store under `agent`
       const createPayload: any = {
@@ -195,7 +208,34 @@ export class MobilierController {
         const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
         cb(null, `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`);
       }
-    })
+    }),
+    fileFilter: (req, file, cb) => {
+      // mirror the create() fileFilter but for new* fieldnames
+      try {
+        if (file.fieldname === 'newImages') {
+          if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+            return cb(new Error('Seules les images (jpg, jpeg, png...) sont autorisées'), false);
+          }
+        } else if (file.fieldname === 'newVideos') {
+          if (!file.mimetype || !file.mimetype.startsWith('video/')) {
+            return cb(new Error('Seules les vidéos (mp4, webm, mov, ...) sont autorisées'), false);
+          }
+        } else if (file.fieldname === 'newDocuments') {
+          if (!file.mimetype || !file.mimetype.match(/\/(pdf)$/)) {
+            return cb(new Error('Seuls les documents PDF sont autorisés'), false);
+          }
+        }
+
+        if (typeof file.size === 'number' && file.size > 20 * 1024 * 1024) { // 20MB
+          return cb(new Error('La taille du fichier ne doit pas dépasser 20MB'), false);
+        }
+
+        cb(null, true);
+      } catch (e) {
+        console.warn('update fileFilter error', e);
+        cb(null, true);
+      }
+    }
   }))
   async update(
     @Param('id') id: string,

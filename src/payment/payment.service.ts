@@ -42,7 +42,7 @@ export class PaymentService {
         paymentMethod: string;
     }): string {
         const { paymentId, frontendUrl, amount, paymentMethod } = params;
-        return `${frontendUrl}/payment-simulation/${paymentId}?amount=${amount}&method=${paymentMethod}`;
+        return `/payment-simulation/${paymentId}?amount=${amount}&method=${paymentMethod}`;
     }
 
     async processPayment(data: CreatePaymentDto): Promise<any> {
@@ -63,10 +63,7 @@ export class PaymentService {
         }
 
         try {
-            // Configuration des URLs
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-
+           
             // Simuler un délai de traitement en mode test
             if (this.isTestMode) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -103,10 +100,7 @@ export class PaymentService {
                 };
             }
 
-            // Logger les URLs pour le débogage
-            Logger.log(`Frontend URL: ${frontendUrl}`, 'PaymentService');
-            Logger.log(`Backend URL: ${backendUrl}`, 'PaymentService');
-
+            
             // Générer un ID de paiement simulé
             const simulatedPaymentId = `SIM_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             
@@ -116,7 +110,9 @@ export class PaymentService {
                 // Simuler une réponse de l'API de paiement
                 responseData = {
                     payment_id: simulatedPaymentId,
-                    payment_url: `${frontendUrl}/payment-simulation/${simulatedPaymentId}`,
+                    // Include accountId and plan in the simulated payment URL so the frontend simulation
+                    // can forward necessary metadata to the webhook handler.
+                    payment_url: `/payment-simulation/${simulatedPaymentId}?accountId=${encodeURIComponent(accountId)}&plan=${encodeURIComponent(plan)}`,
                     status: 'pending',
                     amount: amount,
                     currency: 'USD'
@@ -152,8 +148,8 @@ export class PaymentService {
 
             // Sauvegarder le paiement dans la base de données
             const payment = new this.paymentModel(paymentRecord);
-            await payment.save();
-
+            const pay = await payment.save();
+            console.log(pay)
             // En mode test, on retourne une URL de simulation
             return {
                 paymentUrl: responseData.payment_url,
@@ -202,10 +198,16 @@ export class PaymentService {
 
     async handlePaymentWebhook(webhookData: any): Promise<any> {
         const { payment_id, status, metadata } = webhookData;
+        Logger.log('Received webhook data: ' + JSON.stringify(webhookData), 'PaymentService');
+        if (!metadata) {
+            Logger.warn('Webhook metadata missing', 'PaymentService');
+            throw new BadRequestException('Webhook metadata manquante');
+        }
+
         const { accountId, plan } = metadata;
 
         // Vérifier la signature du webhook (à implémenter selon la documentation FreshPay)
-        
+
         if (status === 'completed') {
             // Mettre à jour le statut du paiement
             await this.paymentModel.findOneAndUpdate(
@@ -215,6 +217,7 @@ export class PaymentService {
 
             // Activer l'abonnement
             const owner = await this.ownerModel.findById(accountId);
+            console.log("owner apres payement : "+ owner)
             if (owner) {
                 owner.isActive = true;
                 owner.subscriptionType = plan;
