@@ -13,9 +13,6 @@ export class CreateOwnerDto {
   @IsNotEmpty()
   prenom: string;
 
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
 
   @IsString()
   @IsNotEmpty()
@@ -56,11 +53,10 @@ export interface OwnerMetaDto {
     nom: string;
     postnom: string;
     prenom: string;
-    email: string;
     phone: string;
     address: string;
   };
-  propTitleFiles: string[];
+  propTitleFiles?: string[];
   subscriptionEndDate?: Date;
   subscriptionType?: 'freemium' | 'monthly' | 'commission';
 }

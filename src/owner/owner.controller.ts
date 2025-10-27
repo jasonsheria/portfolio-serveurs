@@ -167,16 +167,11 @@ export class OwnerController {
   async checkUserAccount(@Req() req: RequestWithUser) {
     // Diagnostic logging to help understand why lookups might fail
     try {
-      console.log('checkUserAccount: req.user =', req.user);
       const rawId = req.user?.id || req.user?.userId || req.user?._id;
-      console.log('checkUserAccount: resolved rawId =', rawId);
       const userId = new Types.ObjectId(String(rawId));
-      console.log('checkUserAccount: using ObjectId =', userId.toString());
       const result = await this.ownerService.findByUserId(userId);
-      console.log('checkUserAccount: ownerService result =', result && (result.hasAccount ? 'HAS_ACCOUNT' : 'NO_ACCOUNT'));
       return result;
     } catch (err) {
-      console.error('checkUserAccount: error resolving userId', err);
       throw err;
     }
   }
@@ -188,12 +183,9 @@ export class OwnerController {
     try {
       const rawId = req.user?.id || req.user?.userId || req.user?._id;
       const userId = new Types.ObjectId(String(rawId));
-      console.log('debugAccount: resolved userId=', String(userId));
       const docs = await this.ownerService.findAllByUserId(userId);
-      console.log('debugAccount: found docs count=', (docs && docs.length) || 0);
       return { count: (docs && docs.length) || 0, docs };
     } catch (err) {
-      console.error('debugAccount: error', err);
       throw err;
     }
   }
@@ -213,29 +205,24 @@ export class OwnerController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     try {
-      console.log("Route /api/owner/:id appelée");
-      console.log("ID reçu:", id);
+    
 
       // Essayer d'abord de trouver par ID de propriétaire
       try {
         const result = await this.ownerService.findOne(id);
-        console.log("Propriétaire trouvé par ID:", result);
         return result;
       } catch (error) {
         if (error instanceof NotFoundException) {
           // Si non trouvé par ID, essayer par ID utilisateur
-          console.log("Tentative de recherche par ID utilisateur");
           const userId = new Types.ObjectId(id);
           const ownerByUser = await this.ownerService.findByUserId(userId);
           if (ownerByUser.hasAccount) {
-            console.log("Propriétaire trouvé par ID utilisateur:", ownerByUser.owner);
             return ownerByUser.owner;
           }
         }
         throw error;
       }
     } catch (error) {
-      console.error("Erreur dans findOne:", error);
       if (error instanceof NotFoundException) {
         throw new NotFoundException("Propriétaire non trouvé");
       }

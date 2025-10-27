@@ -19,13 +19,6 @@ export class OwnerService {
       if (existingOwnerByUser) {
         throw new BadRequestException('Vous possédez déjà un compte propriétaire');
       }
-      
-      // Vérifier si l'email existe déjà
-      const existingOwner = await this.ownerModel.findOne({ email: createOwnerDto.email });
-      if (existingOwner) {
-        throw new BadRequestException('Un propriétaire avec cet email existe déjà');
-      }
-
       // Créer le nouveau propriétaire
       const newOwner = new this.ownerModel(createOwnerDto);
       return await newOwner.save();
@@ -37,7 +30,6 @@ export class OwnerService {
     }
   }
   async findByUserId(userId: Types.ObjectId) {
-    
     try {
       let owner = await this.ownerModel.findOne({ user: userId }).populate('user');
       // Fallback: sometimes user is stored as string or different field; try string match
@@ -64,7 +56,7 @@ export class OwnerService {
     try {
       const owner = await this.ownerModel.findOne({ user: userId })
         .populate('user')
-        .select('nom postnom prenom phone email rating certified certRequested certificationNote subscriptionType address types idFilePath propertyTitlePaths status isActive subscriptionEndDate');
+        .select('nom postnom prenom phone rating certified certRequested certificationNote subscriptionType address types idFilePath propertyTitlePaths status isActive subscriptionEndDate');
       
       if (!owner) {
         throw new NotFoundException('Profil propriétaire non trouvé');
@@ -76,7 +68,7 @@ export class OwnerService {
       return {
         id: owner._id,
         name: `${owner.nom} ${owner.postnom} ${owner.prenom}`,
-        email: owner.email || user.email,
+        email: user.email,
         phone: owner.phone,
         rating: owner.rating || 0,
         certified: owner.certified || false,
@@ -192,21 +184,21 @@ export class OwnerService {
     }
 
     // Vérifier si le compte a déjà été activé avec un abonnement
-    if (owner.subscriptionType === 'freemium') {
+    if (owner.subscriptionEndDate< new Date() && owner.subscriptionType ==='freemium') {
       // throw new BadRequestException('Vous avez déjà épuisé votre temps d\'essai gratuit. Veuillez choisir un autre type d\'abonnement.');
       return {
-      message: 'Vous etes deja en mode freemium',
+      message: 'Vous etes deja en mode freemium et vous avez epuisez le temps d\'essaie',
       owner
     };
     }
 
     // Activer le compte avec l'abonnement freemium
-    owner.isActive = true;
-    owner.subscriptionType = 'freemium';
+    owner.isActive = true;  owner.subscriptionType = 'freemium';
     owner.status = 'active';
     owner.paymentId = null;
     // Définir la date de fin d'abonnement à 1 an par défaut
-    owner.subscriptionEndDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+   
+   owner.subscriptionEndDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
     await owner.save();
 
