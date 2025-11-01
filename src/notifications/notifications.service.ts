@@ -26,6 +26,16 @@ export class NotificationsService {
     }
   }
 
+  async findUnread(userId: string) {
+    try {
+      if (!userId) return [];
+      return await this.notificationModel.find({ user: userId, isRead: { $in: [false, null, undefined] } }).sort({ createdAt: -1 }).lean().exec();
+    } catch (error) {
+      this.logger.error('findUnread notifications error: ' + error.message, error.stack);
+      return [];
+    }
+  }
+
   async create(body: any) {
     try {
       const created = await new this.notificationModel(body).save();
@@ -33,13 +43,16 @@ export class NotificationsService {
       try {
         const targetUserId = created.user || null;
         if (targetUserId && this.chatGateway && typeof this.chatGateway.emitNotificationToUser === 'function') {
-          // Build a sanitized payload with only the required fields
+          // Build a sanitized payload with the fields the frontend expects
           const payload = {
             id: (created as any)._id ? (created as any)._id.toString() : (created as any).id || null,
-            content: (created as any).content || '',
-            source: (created as any).source || null,
-            createdAt: (created as any).createdAt || new Date(),
-            isRead: (created as any).isRead || false,
+            user: (created as any).user ? ((created as any).user.toString ? (created as any).user.toString() : (created as any).user) : null,
+            userId: (created as any).user ? ((created as any).user.toString ? (created as any).user.toString() : (created as any).user) : null,
+            senderId: (created as any).sender ? ((created as any).sender.toString ? (created as any).sender.toString() : (created as any).sender) : null,
+            title: (created as any).title || null,
+            message: (created as any).message || (created as any).content || '',
+            unread: !(created as any).isRead,
+            timestamp: (created as any).createdAt || new Date(),
           };
           this.chatGateway.emitNotificationToUser(targetUserId.toString(), payload);
         }
@@ -71,6 +84,16 @@ export class NotificationsService {
     } catch (error) {
       this.logger.error('markAsUnread error: ' + error.message, error.stack);
       throw error;
+    }
+  }
+
+  async findById(id: string) {
+    try {
+      if (!id) return null;
+      return await this.notificationModel.findById(id).lean().exec();
+    } catch (error) {
+      this.logger.error('findById notification error: ' + error.message, error.stack);
+      return null;
     }
   }
 

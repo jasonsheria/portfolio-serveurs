@@ -34,6 +34,7 @@ import { VisitModule } from './visit/visit.module'; // Ajout du module de tracki
 import { ServiceModule } from './service/service.module'; // Importer le module de service
 // import { StripeModule } from './stripe/stripe.module';
 import { OwnerModule } from './owner/owner.module';
+import { ReservationsModule } from './reservations/reservations.module';
 @Module({
   imports: [
       // Charger le module de configuration en premier.
@@ -73,6 +74,7 @@ import { OwnerModule } from './owner/owner.module';
     ProjetModule, // Ajouté ici pour activer les routes projet
     VisitModule, // Ajouté ici pour activer le tracking des visites
     ServiceModule, 
+  ReservationsModule,
     // StripeModule, 
     AgentModule,
     MobilierModule,

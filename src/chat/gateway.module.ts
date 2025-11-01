@@ -5,8 +5,10 @@ import { UsersModule } from "../users/users.module";
 import { MessagesModule } from "../messages/messages.module";
 import { BotModule } from "../bot/bot.module"; // Importer le module Bot si nécessaire
 import { MessageForumModule } from '../messages/message_forum.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+
 @Module({
-        imports: [forwardRef(() => AuthModule), UsersModule, MessagesModule, BotModule, MessageForumModule],
+        imports: [forwardRef(() => AuthModule), UsersModule, MessagesModule, BotModule, MessageForumModule, forwardRef(() => NotificationsModule)],
         providers: [ChatGateway],
         exports: [ChatGateway],
 

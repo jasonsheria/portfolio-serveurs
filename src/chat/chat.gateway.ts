@@ -19,6 +19,7 @@ import { UsersService } from '../users/users.service';
 import { BotService } from "../bot/bot.service"; // Exemple de service de bot
 import { MessageForum } from '../entity/messages/message_forum.schema';
 import { MessageForumService } from '../messages/message_forum.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { join } from 'path';
 import { writeFileSync } from 'fs';
 import { chatFileConfig } from './utils/file.config';
@@ -48,6 +49,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         private readonly usersService: UsersService, // Service pour la gestion des utilisateurs
         private readonly messagesService: MessagesService, // Service pour la gestion des messages et conversations
         private readonly messageForumService: MessageForumService, // Service pour la gestion des messages forum
+        private readonly notificationsService: NotificationsService,
     ) { }
 
     // --- Cycle de vie de la Gateway ---
@@ -75,22 +77,40 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         // avant même qu'il ne puisse envoyer des messages ou rejoindre des rooms.
         server.use(async (socket: Socket & { data?: { user?: User } }, next) => {
             this.logger.log(`[SOCKET] Middleware d'authentification appelé pour socket.id=${socket.id}`);
-            const token = socket.handshake.auth.token;
+            // Accept token from multiple places to be tolerant with clients:
+            // 1. socket.handshake.auth.token (preferred)
+            // 2. socket.handshake.query.token (fallback for older clients)
+            // 3. Authorization header (Bearer <token>)
+            let token: string | undefined = undefined;
+            try {
+                token = socket.handshake?.auth?.token;
+                if (!token) token = (socket.handshake?.query && (socket.handshake.query as any).token) as string | undefined;
+                if (!token && socket.handshake?.headers && socket.handshake.headers.authorization) {
+                    token = (socket.handshake.headers.authorization as string).replace(/^Bearer\s+/i, '').trim();
+                }
+            } catch (err) {
+                this.logger.warn(`[SOCKET] Erreur lors de la lecture du token handshake pour socket.id=${socket.id}: ${err?.message || err}`);
+            }
+
             if (!token) {
                 this.logger.warn(`[SOCKET] Connexion refusée: pas de token pour socket.id=${socket.id}`);
                 return next(new Error('Authentication token not provided'));
             }
+
             try {
+                // Normalize token (remove Bearer prefix if present)
+                token = token.replace(/^Bearer\s+/i, '').trim();
+                this.logger.log(`[SOCKET] Tentative d'authentification via token (truncated): ${token.substring(0, 8)}... for socket.id=${socket.id}`);
                 const user = await this.authService.validateWebSocketConnection(token);
                 if (!user) {
-                    this.logger.warn(`[SOCKET] Authentification échouée pour token: ${token} (socket.id=${socket.id})`);
+                    this.logger.warn(`[SOCKET] Authentification échouée pour token (truncated): ${token.substring(0, 8)}... (socket.id=${socket.id})`);
                     return next(new Error('Authentication failed'));
                 }
                 socket.data.user = user;
                 this.logger.log(`[SOCKET] Utilisateur authentifié: ${user.email} (${user.id}) via socket.id=${socket.id}`);
                 next();
             } catch (error) {
-                this.logger.error(`[SOCKET] Erreur d'authentification WebSocket pour le token ${token} (socket.id=${socket.id}): ${error.message}`, error.stack);
+                this.logger.error(`[SOCKET] Erreur d'authentification WebSocket pour socket.id=${socket.id}: ${error?.message || error}`);
                 next(new Error('Authentication failed'));
             }
         });
@@ -107,6 +127,30 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             if (!this.userSocketMap.has(userId)) this.userSocketMap.set(userId, new Set());
             this.userSocketMap.get(userId)!.add(client.id);
             this.logger.log(`[SOCKET MAP] userId ${userId} sockets: ${Array.from(this.userSocketMap.get(userId)!)}`);
+            // After mapping the socket, send unread notifications to this socket so that
+            // the client receives any missed notifications after a page reload / reconnect.
+            (async () => {
+                try {
+                    const unread = await this.notificationsService.findUnread(userId);
+                    if (Array.isArray(unread) && unread.length > 0) {
+                        // Normalize the payload to match frontend expectations
+                        const payload = unread.map((item: any) => ({
+                            id: item._id ? item._id.toString() : (item.id || null),
+                            user: item.user ? (item.user.toString ? item.user.toString() : item.user) : null,
+                            userId: item.user ? (item.user.toString ? item.user.toString() : item.user) : null,
+                            senderId: item.sender ? (item.sender.toString ? item.sender.toString() : item.sender) : null,
+                            title: item.title || null,
+                            message: item.message || item.content || '',
+                            unread: !(item.isRead),
+                            timestamp: item.createdAt || item.date || new Date(),
+                        }));
+                        // Emit only to this socket
+                        this.server.to(client.id).emit('notificationHistory', payload);
+                    }
+                } catch (err) {
+                    this.logger.error(`[SOCKET] failed to send notificationHistory to socket ${client.id}: ${err?.message || err}`);
+                }
+            })();
         } else {
             this.logger.warn(`[SOCKET] handleConnection: Aucun user attaché au socket.id=${client.id}`);
         }
@@ -318,6 +362,113 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         }
         this.logger.log(`[SOCKET] Réponse du bot envoyée à ${sender.email || senderId} (sockets: ${senderSocketIds}) : ${botResponse}`);
     }
+
+    // --- Receive a notification emitted by a client and persist it ---
+    @SubscribeMessage('emitNotification')
+    async handleEmitNotification(
+        @MessageBody() data: any,
+        @ConnectedSocket() client: Socket & { data?: { user?: User } },
+    ) {
+        const user = client.data.user;
+        // Only authenticated clients
+        if (!user) {
+            client.emit('error', { message: 'Authentication required to emit notification' });
+            return;
+        }
+
+        // Validate payload: must target a user
+        if (!data || !data.user) {
+            client.emit('error', { message: 'Invalid notification payload: missing target user' });
+            return;
+        }
+
+        try {
+            // Prefer senderId from payload, otherwise the authenticated user
+            const senderId = data.senderId || (user.id || (user as any)._id);
+            const createBody = {
+                user: data.user,
+                sender: senderId,
+                title: data.title || null,
+                message: data.message || data.content || '',
+                content: data.content || data.message || '',
+                source: data.source || 'socket',
+                isRead: false,
+            };
+
+            const created = await this.notificationsService.create(createBody);
+            // Confirm to emitter
+            client.emit('notificationSaved', { id: (created as any)._id ? (created as any)._id.toString() : null });
+        } catch (err) {
+            this.logger.error(`[SOCKET] Failed to create notification from socket ${client.id}: ${err?.message || err}`);
+            client.emit('error', { message: 'Failed to create notification' });
+        }
+    }
+
+        // Mark a notification as read (client requests deletion). This will delete the notification
+        // in DB and notify all sockets of the owning user to remove it from their UI.
+        @SubscribeMessage('markNotificationRead')
+        async handleMarkNotificationRead(
+            @MessageBody() data: { id: string },
+            @ConnectedSocket() client: Socket & { data?: { user?: User } },
+        ) {
+            const user = client.data.user;
+            if (!user) {
+                client.emit('error', { message: 'Authentication required to mark notification' });
+                return;
+            }
+            if (!data || !data.id) {
+                client.emit('error', { message: 'Notification id required' });
+                return;
+            }
+
+            try {
+                // Ensure notification belongs to this user for security
+                const existing = await this.notificationsService.findById(data.id);
+                if (!existing) {
+                    client.emit('error', { message: 'Notification not found' });
+                    return;
+                }
+                const notificationOwnerId = existing.user ? (existing.user.toString ? existing.user.toString() : existing.user) : null;
+                const requesterId = (user.id || (user as any)._id || '').toString();
+                if (!notificationOwnerId || String(notificationOwnerId) !== String(requesterId)) {
+                    client.emit('error', { message: 'Unauthorized to remove this notification' });
+                    return;
+                }
+
+                // Delete from DB
+                await this.notificationsService.remove(data.id);
+
+                // Notify all sockets of this user to remove the notification
+                const sockets = Array.from(this.userSocketMap.get(requesterId) || []);
+                sockets.forEach(socketId => {
+                    this.server.to(socketId).emit('notificationRemoved', { id: data.id });
+                });
+
+                // Also push an updated unread history so clients can re-sync counts
+                try {
+                    const unread = await this.notificationsService.findUnread(requesterId);
+                    const payload = Array.isArray(unread) ? unread.map((item: any) => ({
+                        id: item._id ? item._id.toString() : (item.id || null),
+                        user: item.user ? (item.user.toString ? item.user.toString() : item.user) : null,
+                        userId: item.user ? (item.user.toString ? item.user.toString() : item.user) : null,
+                        senderId: item.sender ? (item.sender.toString ? item.sender.toString() : item.sender) : null,
+                        title: item.title || null,
+                        message: item.message || item.content || '',
+                        unread: !(item.isRead),
+                        timestamp: item.createdAt || item.date || new Date(),
+                    })) : [];
+                    sockets.forEach(socketId => this.server.to(socketId).emit('notificationHistory', payload));
+                } catch (err) {
+                    this.logger.error('[SOCKET] failed to send updated notificationHistory after removal: ' + (err?.message || err));
+                }
+
+                // Confirm to the requester
+                client.emit('notificationRemovedAck', { id: data.id });
+            } catch (err) {
+                this.logger.error('[SOCKET] Error in handleMarkNotificationRead: ' + (err?.message || err));
+                client.emit('error', { message: 'Failed to remove notification' });
+            }
+        }
 
     // --- Chatroom Admin : écoute et diffusion des messages des admins ---
     @SubscribeMessage('adminChatRoomMessage')

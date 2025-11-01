@@ -1,15 +1,32 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
 
 export class CreateNotificationDto {
   @IsString()
   @IsNotEmpty()
   user: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  content: string;
+  senderId?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  source: string;
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  message?: string;
+
+  // For backwards compatibility
+  @IsOptional()
+  @IsString()
+  content?: string;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isRead?: boolean;
 }
