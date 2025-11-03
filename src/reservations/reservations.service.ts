@@ -111,7 +111,7 @@ export class ReservationsService {
                 const results = await this.reservationModel.find(q).sort({ createdAt: -1 }).populate('property').lean().exec();
                 if (Array.isArray(results) && results.length > 0) {
                     this.logger.log(`findByUser: found ${results.length} reservations for query ${JSON.stringify(q)}`);
-                    return results;
+                    return {data : results};
                 }
             }
 
