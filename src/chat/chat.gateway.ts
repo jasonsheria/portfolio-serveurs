@@ -253,7 +253,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     // Écoute l'événement 'sendMessage' émis par le frontend lorsqu'un utilisateur envoie un nouveau message
     @SubscribeMessage('sendMessage')
     async handleMessage(
-        @MessageBody() data: { roomId: string; content: string; senderId?: string },
+        @MessageBody() data: { roomId: string; content: string; senderId?: string; tempId?: string },
         @ConnectedSocket() client: Socket & { data?: { user?: User } },
     ): Promise<void> {
         const user = client.data.user;
@@ -291,6 +291,12 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
                 senderId: user.id,
                 timestamp: new Date(),
             });
+            // If the client provided a tempId for optimistic UI update, attach it so clients can reconcile
+            try {
+                if (data && (data as any).tempId) {
+                    (savedMessage as any).tempId = (data as any).tempId;
+                }
+            } catch (e) {}
             this.server.to(data.roomId).emit('newMessage', savedMessage);
             this.logger.log(`Message sauvegardé et diffusé dans la room ${data.roomId}`);
         } catch (error) {
@@ -302,7 +308,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     // Écouteur direct pour l'événement 'newMessage' (émis par le client)
     @SubscribeMessage('newMessage')
     async handleNewMessage(
-        @MessageBody() data: { userId: string; text: string }, // userId = destinataire (mais ici on va répondre au sender)
+        @MessageBody() data: { userId: string; text: string; tempId?: string }, // userId = destinataire (mais ici on va répondre au sender)
         @ConnectedSocket() client: Socket & { data?: { user?: User } },
     ): Promise<void> {
         // 1. Authentification de l'expéditeur (sender)
@@ -347,7 +353,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             this.server.to(socketId).emit('receiveMessage', {
                 from: fromField,
                 text: botResponse,
-                date: new Date().toISOString()
+                date: new Date().toISOString(),
+                tempId: data.tempId || null
             });
         });
         // Si le destinataire est différent, envoie aussi à tous ses sockets
@@ -356,7 +363,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
                 this.server.to(socketId).emit('receiveMessage', {
                     from: fromField,
                     text: botResponse,
-                    date: new Date().toISOString()
+                    date: new Date().toISOString(),
+                    tempId: data.tempId || null
                 });
             });
         }
