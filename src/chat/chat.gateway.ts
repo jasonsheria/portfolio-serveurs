@@ -100,10 +100,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             try {
                 // Normalize token (remove Bearer prefix if present)
                 token = token.replace(/^Bearer\s+/i, '').trim();
-                this.logger.log(`[SOCKET] Tentative d'authentification via token (truncated): ${token.substring(0, 8)}... for socket.id=${socket.id}`);
                 const user = await this.authService.validateWebSocketConnection(token);
                 if (!user) {
-                    this.logger.warn(`[SOCKET] Authentification échouée pour token (truncated): ${token.substring(0, 8)}... (socket.id=${socket.id})`);
                     return next(new Error('Authentication failed'));
                 }
                 socket.data.user = user;
@@ -581,6 +579,136 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         client.leave('admin-chatroom');
         this.logger.log(`${user.email || user._id} a quitté la room admin-chatroom`);
         this.emitAdminRoomUsers();
+    }
+
+    // --- Direct / Private messages between two users ---
+    @SubscribeMessage('privateMessage')
+    async handlePrivateMessage(
+        @MessageBody() data: { recipientId: string; content: string; tempId?: string },
+        @ConnectedSocket() client: Socket & { data?: { user?: User } },
+    ): Promise<void> {
+        const user = client.data.user;
+        if (!user) {
+            client.emit('error', { message: 'Authentication required to send private messages' });
+            return;
+        }
+        if (!data || !data.recipientId || !data.content || typeof data.content !== 'string') {
+            client.emit('error', { message: 'Invalid private message payload' });
+            return;
+        }
+
+        try {
+            // Build a deterministic roomId for direct messages so they can be queried later
+            const senderId = (user.id || (user as any)._id || '').toString();
+            const recipientId = String(data.recipientId);
+            const roomId = `dm_${[senderId, recipientId].sort().join('_')}`;
+
+            // Persist the message via MessagesService using the roomId pattern
+            const savedMessage = await this.messagesService.saveMessage({
+                roomId,
+                content: data.content,
+                senderId: senderId,
+                recipientId: recipientId,
+                timestamp: new Date(),
+            });
+
+
+            // Build a normalized payload to send to clients (frontend expects fromId/toId style fields)
+            const payload = {
+                id: (savedMessage as any)._id ? String((savedMessage as any)._id) : (savedMessage as any).id || null,
+                _id: (savedMessage as any)._id ? String((savedMessage as any)._id) : null,
+                content: (savedMessage as any).content || data.content,
+                timestamp: (savedMessage as any).timestamp || new Date(),
+                roomId,
+                fromId: senderId,
+                toId: recipientId,
+                senderName: (user && ((user as any).name || (user as any).email)) || null,
+                recipientName: null,
+                tempId: data.tempId || null,
+            };
+
+            // Try to fetch recipient name if possible (best effort)
+            try {
+                const rec = await this.usersService.findById(recipientId);
+                if (rec) payload.recipientName = (rec as any).name || (rec as any).email || null;
+            } catch (e) {}
+
+            // Emit only to sockets of the sender and the recipient
+            const senderSocketIds = Array.from(this.userSocketMap.get(senderId) || []);
+            const recipientSocketIds = Array.from(this.userSocketMap.get(recipientId) || []);
+
+            this.logger.log(`[privateMessage] senderSockets=${senderSocketIds.length} recipientSockets=${recipientSocketIds.length} payload.tempId=${payload.tempId}`);
+
+            // Emit to sender sockets
+            senderSocketIds.forEach(socketId => this.server.to(socketId).emit('privateMessage', payload));
+
+            // Emit an ACK to the sender so the client can reconcile tempId -> real id
+            try {
+                const ack = {
+                    tempId: payload.tempId || null,
+                    id: payload._id || payload.id || null,
+                    _id: payload._id || null,
+                    roomId: payload.roomId,
+                    timestamp: payload.timestamp || new Date(),
+                    fromId: payload.fromId,
+                    toId: payload.toId,
+                };
+                senderSocketIds.forEach(socketId => this.server.to(socketId).emit('privateMessageAck', ack));
+            } catch (e) {
+                this.logger.warn(`[privateMessage] failed to send ack to sender: ${e?.message || e}`);
+            }
+
+            // Emit to recipient sockets if known
+            recipientSocketIds.forEach(socketId => this.server.to(socketId).emit('privateMessage', payload));
+
+            // Fallback: sometimes userSocketMap may be out-of-date (race conditions, reconnects, etc.).
+            // Try to find sockets by inspecting connected sockets' data.user (best-effort) and emit there.
+            if (!recipientSocketIds || recipientSocketIds.length === 0) {
+                const fallbackSockets: string[] = [];
+                try {
+                    for (const [sockId, sock] of this.server.sockets.sockets) {
+                        try {
+                            const du = (sock as any).data && (sock as any).data.user ? (sock as any).data.user : null;
+                            const duId = du ? (du.id || du._id || (du as any)._id) : null;
+                            if (duId && String(duId) === String(recipientId)) {
+                                this.logger.log(`[privateMessage-fallback] found socket ${sockId} for recipient ${recipientId}, emitting`);
+                                this.server.to(sockId).emit('privateMessage', payload);
+                                fallbackSockets.push(sockId);
+                            }
+                        } catch (inner) { /* ignore per-socket errors */ }
+                    }
+                } catch (e) {
+                    this.logger.warn(`[privateMessage-fallback] error while scanning sockets: ${e?.message || e}`);
+                }
+
+                if (fallbackSockets.length > 0) {
+                    this.logger.log(`[privateMessage-fallback] emitted to ${fallbackSockets.length} fallback socket(s) for recipient ${recipientId}`);
+                } else {
+                    // Recipient appears offline — create a lightweight notification (best-effort)
+                    try {
+                        // notificationsService.create signature may vary; use a minimal payload commonly supported.
+                        if (this.notificationsService && typeof this.notificationsService.create === 'function') {
+                            const note = await this.notificationsService.create({
+                                user: recipientId,
+                                sender: senderId,
+                                title: 'Nouveau message',
+                                message: payload.content || 'Vous avez reçu un nouveau message',
+                                source: 'socket',
+                                isRead: false,
+                            });
+                            this.logger.log(`[privateMessage] recipient offline, notification created for ${recipientId} id=${(note as any)?._id || (note as any)?.id || 'unknown'}`);
+                        }
+                    } catch (nerr) {
+                        this.logger.warn(`[privateMessage] failed to create offline notification for ${recipientId}: ${nerr?.message || nerr}`);
+                    }
+                }
+            }
+
+            // Optionally you could persist notifications here via NotificationsService
+        } catch (err) {
+            this.logger.error(`[SOCKET] Failed to handle privateMessage from ${client.id}: ${err?.message || err}`);
+            client.emit('error', { message: 'Failed to send private message' });
+        }
     }
 
     // --- Autres méthodes selon les besoins (ex: gérer les utilisateurs en ligne) ---

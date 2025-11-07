@@ -114,25 +114,29 @@ export class MessagesService {
      * @param messageData Les données du message à sauvegarder (doit inclure roomId, content, senderId, potentiellement timestamp).
      * @returns Promise<Message> Une promesse qui résout en le document Message Mongoose sauvegardé (avec son _id, timestamp final, etc.).
      */
-    async saveMessage(messageData: { roomId: string; content: string; senderId: string; timestamp?: Date }): Promise<Message> {
-         this.logger.debug(`Attempting to save message for room ${messageData.roomId} by sender ${messageData.senderId}`);
-         try {
+    async saveMessage(messageData: { roomId: string; content: string; senderId: string; recipientId?: string; timestamp?: Date }): Promise<Message> {
+        this.logger.debug(`Attempting to save message for room ${messageData.roomId} by sender ${messageData.senderId}${messageData.recipientId ? ' to recipient ' + messageData.recipientId : ''}`);
+        try {
              // Créer une nouvelle instance du modèle Message avec les données reçues.
              // Mongoose ajoutera automatiquement les champs comme _id et le timestamp si configured dans le schéma.
              const newMessage = new this.messageModel({
-                 roomId: messageData.roomId,
-                 content: messageData.content,
-                 // Important : Utiliser senderId provenant de l'utilisateur AUTHENTIFIÉ dans la gateway,
-                 // et non un senderId potentiellement envoyé par le client dans messageData.
-                 sender: messageData.senderId, // Assurez-vous que le nom du champ dans votre schéma Mongoose est bien 'sender'
+              roomId: messageData.roomId,
+              content: messageData.content,
+              // Important : Utiliser senderId provenant de l'utilisateur AUTHENTIFIÉ dans la gateway,
+              // et non un senderId potentiellement envoyé par le client dans messageData.
+              sender: messageData.senderId, // Assurez-vous que le nom du champ dans votre schéma Mongoose est bien 'sender'
+                
+              // Si un destinataire est fourni, l'enregistrer également
+              recipient: messageData.recipientId ? messageData.recipientId : undefined,
                  timestamp: messageData.timestamp || new Date(), // Utilise le timestamp fourni ou génère la date actuelle
                  // Ajoutez ici d'autres champs par défaut ou calculés si nécessaire
              });
 
-             // Sauvegarder le document dans la base de données MongoDB.
-             const savedMessage = await newMessage.save();
+          // Sauvegarder le document dans la base de données MongoDB.
+          const savedMessage = await newMessage.save();
 
-             this.logger.log(`Message saved successfully with ID: ${savedMessage._id} in room ${savedMessage.id}`);
+          // Log the success and ensure we log the original roomId passed in
+          this.logger.log(`Message saved successfully with ID: ${savedMessage._id} in room ${messageData.roomId}`);
 
              // Retourner le document sauvegardé. La gateway l'utilisera pour le diffuser.
              return savedMessage;

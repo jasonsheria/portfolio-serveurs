@@ -33,6 +33,7 @@ export class BotService {
     private retriever: any; // Consider a more specific type if possible
     private responseCache: Map<string, string> = new Map();
     private isVectorStoreInitialized = false; // Flag to track initialization status
+    private initPromise: Promise<void> | null = null;
 
     constructor(
         private userService: UsersService,
@@ -45,11 +46,10 @@ export class BotService {
             temperature: 0.1,
         });
 
-        // Asynchronously initialize the vector store
-        this.initVectorStore().catch(error => {
+        // Asynchronously initialize the vector store and keep the promise so we can await later
+        this.initPromise = this.initVectorStore().catch(error => {
             console.error("Failed to initialize vector store:", error);
-            // Depending on your application's needs, you might want to
-            // exit, retry, or set a flag indicating the bot is not fully operational.
+            // Keep isVectorStoreInitialized = false so predilect knows it's not ready
         });
     }
 
@@ -104,13 +104,13 @@ export class BotService {
             // Catch any errors during the initialization process (loading, splitting, embedding, vector store creation)
             console.error("Error during vector store initialization:", error);
             // Specific error handling for the 'fetching blob' error
-            if (error.message.includes("An error occurred while fetching the blob")) {
+            if (error && typeof (error as any).message === 'string' && (error as any).message.includes("An error occurred while fetching the blob")) {
                  console.error("This error often indicates issues with the Hugging Face API key, network connectivity to Hugging Face, or the availability of the embedding model.");
             }
             // Set initialization flag to false if an error occurs
             this.isVectorStoreInitialized = false;
-            // Rethrow or handle the error as appropriate for your application
-            throw error; // Re-throwing the error to be caught by the .catch in the constructor
+            // Do not rethrow here to avoid unhandled exceptions; the initPromise will be rejected and handled by caller
+            return;
         }
     }
 
@@ -138,7 +138,27 @@ export class BotService {
         }
         // Si pas dans le cache ni quick reply, on fait le RAG
         if (!this.isVectorStoreInitialized || !this.retriever) {
-            return "Désolé, le système de connaissances n'est pas encore prêt. Veuillez réessayer plus tard.";
+            // If initialization hasn't completed yet, attempt to wait a short time for it (lazy init)
+            try {
+                if (!this.initPromise) {
+                    this.initPromise = this.initVectorStore().catch(err => {
+                        console.error('Lazy init failed', err);
+                    });
+                }
+                // Wait up to 6 seconds for initialization to complete
+                await Promise.race([
+                    this.initPromise,
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('init timeout')), 6000))
+                ]);
+            } catch (e) {
+                // still not ready after timeout or error
+                console.warn('[BOT] Vector store not ready after waiting:', e && (e as any).message);
+                return "Désolé, le système de connaissances n'est pas encore prêt. Veuillez réessayer plus tard.";
+            }
+            // if initPromise resolved, check flag again
+            if (!this.isVectorStoreInitialized || !this.retriever) {
+                return "Désolé, le système de connaissances n'est pas encore prêt. Veuillez réessayer plus tard.";
+            }
         }
         try {
             const docs = await this.retriever.getRelevantDocuments(normalizedMessage);
