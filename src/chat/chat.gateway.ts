@@ -58,16 +58,109 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     afterInit(server: Server) {
         this.logger.log('Gateway Chat initialisée');
         console.log('Gateway Chat initialisée');
+        // Register authentication middleware BEFORE connection handlers so it runs on incoming sockets
+        // This ensures socket.data.user is available inside the connection handler.
+        server.use(async (socket: Socket & { data?: { user?: User } }, next) => {
+            this.logger.log(`[SOCKET:MIDDLEWARE] auth middleware called for socket.id=${socket.id}, handshake.auth=${JSON.stringify(socket.handshake?.auth || {})}`);
+            // Accept token from multiple places to be tolerant with clients:
+            // 1. socket.handshake.auth.token (preferred)
+            // 2. socket.handshake.query.token (fallback for older clients)
+            // 3. Authorization header (Bearer <token>)
+            let token: string | undefined = undefined;
+            try {
+                token = socket.handshake?.auth?.token;
+                if (!token) token = (socket.handshake?.query && (socket.handshake.query as any).token) as string | undefined;
+                if (!token && socket.handshake?.headers && socket.handshake.headers.authorization) {
+                    token = (socket.handshake.headers.authorization as string).replace(/^Bearer\s+/i, '').trim();
+                }
+            } catch (err) {
+                this.logger.warn(`[SOCKET:MIDDLEWARE] Error reading token from handshake for socket.id=${socket.id}: ${err?.message || err}`);
+            }
+
+            if (!token) {
+                this.logger.warn(`[SOCKET:MIDDLEWARE] Connection rejected: no token for socket.id=${socket.id}`);
+                return next(new Error('Authentication token not provided'));
+            }
+
+            try {
+                token = token.replace(/^Bearer\s+/i, '').trim();
+                const user = await this.authService.validateWebSocketConnection(token);
+                if (!user) {
+                    this.logger.warn(`[SOCKET:MIDDLEWARE] Authentication failed for socket.id=${socket.id}`);
+                    return next(new Error('Authentication failed'));
+                }
+                socket.data.user = user;
+                this.logger.log(`[SOCKET:MIDDLEWARE] Authenticated user: ${user.email} (${user.id}) via socket.id=${socket.id}`);
+                next();
+            } catch (error) {
+                this.logger.error(`[SOCKET:MIDDLEWARE] WebSocket auth error for socket.id=${socket.id}: ${error?.message || error}`);
+                next(new Error('Authentication failed'));
+            }
+        });
+
         // Log when a new socket attempts to connect (handshake)
         server.on('connection', (socket: Socket) => {
-            // Log the handshake details
-            this.logger.log(`[SOCKET] Tentative de connexion handshake: socket.id=${socket.id}, ip=${socket.handshake.address}`);
+            // Log the handshake details and any attached user (if middleware ran)
+            this.logger.log(`[SOCKET] Tentative de connexion handshake: socket.id=${socket.id}, ip=${socket.handshake.address}, handshake.auth=${JSON.stringify(socket.handshake?.auth || {})}, data.user=${JSON.stringify((socket as any).data?.user || null)}`);
             socket.on('disconnecting', (reason) => {
                 this.logger.log(`[SOCKET] Le socket ${socket.id} est en train de se déconnecter. Raison: ${reason}`);
             });
             socket.on('error', (err) => {
                 this.logger.error(`[SOCKET] Erreur sur le socket ${socket.id}: ${err?.message || err}`);
             });
+
+            // --- NOUVEAU: handler pour retourner l'historique sur le même événement (callback) ---
+            const handleGetHistory = async (payload: any, callback?: Function) => {
+                try {
+                    this.logger.log(`[SOCKET] getMessageHistory request from socket=${socket.id} payload=${JSON.stringify(payload || {})}`);
+                    console.log(`[SOCKET] getMessageHistory request from socket=${socket.id} payload=${JSON.stringify(payload || {})}`);
+                    // Simplified: only a user id is required to fetch history.
+                    // Accept either payload.userId or payload.user for compatibility.
+                    const userId = payload && (payload.userId || payload.user) ? String(payload.userId || payload.user) : null;
+                    const limit = payload && payload.limit ? Number(payload.limit) : undefined;
+                    let history: any[] = [];
+
+                    if (!userId) {
+                        this.logger.warn(`[SOCKET] getMessageHistory called without userId from socket=${socket.id}`);
+                        // Respond with empty history for compatibility
+                        try { if (typeof callback === 'function') callback(null, []); } catch (cbErr) { this.logger.warn(`[SOCKET] callback error for getMessageHistory missing userId socket=${socket.id}: ${cbErr?.message || cbErr}`); }
+                        try { socket.emit('messageHistory', []); } catch (emitErr) { this.logger.warn(`[SOCKET] emit messageHistory failed for socket=${socket.id}: ${emitErr?.message || emitErr}`); }
+                        return;
+                    }
+
+                    // Prefer a dedicated service method to fetch recent messages for a user
+                    if (typeof (this.messagesService as any).getRecentForUser === 'function') {
+                        history = await (this.messagesService as any).getRecentForUser(userId, limit || 200);
+                    } else if (typeof (this.messagesService as any).getMessagesForUser === 'function') {
+                        // fallback if an alternative name exists
+                        history = await (this.messagesService as any).getMessagesForUser(userId, limit || 200);
+                    } else {
+                        // No user-oriented method available: return empty array
+                        history = [];
+                    }
+
+                    this.logger.log(`[SOCKET] getMessageHistory response to socket=${socket.id} count=${Array.isArray(history)?history.length:0}`);
+
+                    // Reply via callback if provided (same-event response)
+                    try {
+                        if (typeof callback === 'function') callback(null, history);
+                    } catch (cbErr) {
+                        this.logger.warn(`[SOCKET] callback error for getMessageHistory socket=${socket.id}: ${cbErr?.message || cbErr}`);
+                    }
+
+                    // Also emit 'messageHistory' for compatibility with existing frontends
+                    try { socket.emit('messageHistory', history); } catch (emitErr) { this.logger.warn(`[SOCKET] emit messageHistory failed for socket=${socket.id}: ${emitErr?.message || emitErr}`); }
+
+                } catch (err) {
+                    this.logger.error(`[SOCKET] getMessageHistory handler error for socket=${socket.id}: ${err?.message || err}`);
+                    try { if (typeof callback === 'function') callback(err?.message || err); } catch(e) {}
+                }
+            };
+
+            // register handler on multiple event names for compatibility
+            socket.on('getMessageHistory', handleGetHistory);
+            socket.on('getConversationHistory', handleGetHistory);
+            socket.on('requestMessageHistory', handleGetHistory);
 
         });
 
@@ -130,6 +223,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             (async () => {
                 try {
                     const unread = await this.notificationsService.findUnread(userId);
+                    console.log("unreed messages:", unread);
                     if (Array.isArray(unread) && unread.length > 0) {
                         // Normalize the payload to match frontend expectations
                         const payload = unread.map((item: any) => ({
@@ -148,6 +242,38 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
                 } catch (err) {
                     this.logger.error(`[SOCKET] failed to send notificationHistory to socket ${client.id}: ${err?.message || err}`);
                 }
+                // --- Send recent message history to the connected socket so frontend can immediately render chats ---
+                try {
+                    let history: any[] = [];
+                    try {
+                        console.log("fetching recent messages for userId:", userId);
+                        history = await (this.messagesService).findAll(userId); // Adjust limit as needed
+                        
+                    } catch (fetchErr) {
+                        this.logger.warn(`[SOCKET] failed to fetch recent messages for ${userId}: ${fetchErr?.message || fetchErr}`);
+                        history = [];
+                    }
+
+                    const normalized = Array.isArray(history) ? history.map(m => ({
+                        id: m._id ? String(m._id) : (m.id || null),
+                        fromId: m.sender || m.fromId || (m.from && m.from.id) || null,
+                        // fromName: m.senderName || m.fromName || (m.from && m.from.name) || '',
+                        toId: m.recipient || m.toId || (m.to && m.to.id) || null,
+                        // toName: m.recipientName || m.toName || (m.to && m.to.name) || '',
+                        text: m.content || m.text || m.message || '',
+                        timestamp: m.timestamp || m.date || m.time || new Date(),
+                        // roomId: m.roomId || null,
+                        read: !!m.read,
+                        status: m.status || 'delivered'
+                    })) : [];
+
+                    this.logger.log(`[SOCKET] sending initial messageHistory to socket=${client.id} user=${userId} count=${normalized.length}`);
+                    this.server.to(client.id).emit('messageHistory', normalized);
+                } catch (err) {
+                    this.logger.warn(`[SOCKET] initial messageHistory emit failed for socket=${client.id} user=${userId}: ${err?.message || err}`);
+                }
+
+                
             })();
         } else {
             this.logger.warn(`[SOCKET] handleConnection: Aucun user attaché au socket.id=${client.id}`);
@@ -582,38 +708,53 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
 
     // --- Direct / Private messages between two users ---
-    @SubscribeMessage('privateMessage')
-    async handlePrivateMessage(
-        @MessageBody() data: { recipientId: string; content: string; tempId?: string },
+    // NEW: unified private chat event with sender & recipient keys
+    @SubscribeMessage('privateChat')
+    async handlePrivateChat(
+        @MessageBody() data: { senderId: string; recipientId: string; content: string; tempId?: string; roomId?: string },
         @ConnectedSocket() client: Socket & { data?: { user?: User } },
     ): Promise<void> {
-        const user = client.data.user;
-        if (!user) {
-            client.emit('error', { message: 'Authentication required to send private messages' });
+        // Validate sender: require authenticated socket OR explicit senderId matching authenticated user
+        const user = client.data?.user;
+        const authenticatedId = user ? String(user.id || (user as any)._id || '') : null;
+        const senderId = data && data.senderId ? String(data.senderId) : authenticatedId;
+        const recipientId = data && data.recipientId ? String(data.recipientId) : null;
+
+        if (!senderId || !recipientId || !data || typeof data.content !== 'string') {
+            client.emit('error', { message: 'Invalid privateChat payload' });
             return;
         }
-        if (!data || !data.recipientId || !data.content || typeof data.content !== 'string') {
-            client.emit('error', { message: 'Invalid private message payload' });
-            return;
+        // If authenticated, ensure senderId matches user (prevent spoofing)
+        if (authenticatedId && authenticatedId !== senderId) {
+            this.logger.warn(`[privateChat] senderId mismatch: authenticated=${authenticatedId} payload=${senderId}`);
+            // enforce sender = authenticatedId
+            // senderId = authenticatedId; // optionally enforce
         }
 
         try {
-            // Build a deterministic roomId for direct messages so they can be queried later
-            const senderId = (user.id || (user as any)._id || '').toString();
-            const recipientId = String(data.recipientId);
-            const roomId = `dm_${[senderId, recipientId].sort().join('_')}`;
+            // Determine deterministic roomId if not provided
+            const roomId = data.roomId ? String(data.roomId) : `dm_${[senderId, recipientId].sort().join('_')}`;
 
-            // Persist the message via MessagesService using the roomId pattern
+            // Ensure conversation exists (best-effort)
+            try {
+                if (typeof (this.messagesService as any).ensureConversation === 'function') {
+                    await (this.messagesService as any).ensureConversation(roomId, [senderId, recipientId]);
+                }
+            } catch (e) {
+                this.logger.warn(`[privateChat] ensureConversation failed for room ${roomId}: ${e?.message || e}`);
+            }
+
+            // Persist the message
             const savedMessage = await this.messagesService.saveMessage({
                 roomId,
                 content: data.content,
-                senderId: senderId,
-                recipientId: recipientId,
+                senderId,
+                recipientId,
                 timestamp: new Date(),
+                // delivered: false
             });
 
-
-            // Build a normalized payload to send to clients (frontend expects fromId/toId style fields)
+            // build normalized payload
             const payload = {
                 id: (savedMessage as any)._id ? String((savedMessage as any)._id) : (savedMessage as any).id || null,
                 _id: (savedMessage as any)._id ? String((savedMessage as any)._id) : null,
@@ -623,91 +764,60 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
                 fromId: senderId,
                 toId: recipientId,
                 senderName: (user && ((user as any).name || (user as any).email)) || null,
-                recipientName: null,
                 tempId: data.tempId || null,
             };
 
-            // Try to fetch recipient name if possible (best effort)
+            // ACK the sender via callback (if client used callback) and also via event privateChatAck
             try {
-                const rec = await this.usersService.findById(recipientId);
-                if (rec) payload.recipientName = (rec as any).name || (rec as any).email || null;
-            } catch (e) {}
-
-            // Emit only to sockets of the sender and the recipient
-            const senderSocketIds = Array.from(this.userSocketMap.get(senderId) || []);
-            const recipientSocketIds = Array.from(this.userSocketMap.get(recipientId) || []);
-
-            this.logger.log(`[privateMessage] senderSockets=${senderSocketIds.length} recipientSockets=${recipientSocketIds.length} payload.tempId=${payload.tempId}`);
-
-            // Emit to sender sockets
-            senderSocketIds.forEach(socketId => this.server.to(socketId).emit('privateMessage', payload));
-
-            // Emit an ACK to the sender so the client can reconcile tempId -> real id
-            try {
-                const ack = {
-                    tempId: payload.tempId || null,
-                    id: payload._id || payload.id || null,
-                    _id: payload._id || null,
-                    roomId: payload.roomId,
-                    timestamp: payload.timestamp || new Date(),
-                    fromId: payload.fromId,
-                    toId: payload.toId,
-                };
-                senderSocketIds.forEach(socketId => this.server.to(socketId).emit('privateMessageAck', ack));
+                const senderSockets = Array.from(this.userSocketMap.get(senderId) || []);
+                const ack = { tempId: payload.tempId || null, id: payload._id || payload.id || null, roomId: payload.roomId, timestamp: payload.timestamp };
+                senderSockets.forEach(sid => this.server.to(sid).emit('privateChatAck', ack));
             } catch (e) {
-                this.logger.warn(`[privateMessage] failed to send ack to sender: ${e?.message || e}`);
+                this.logger.warn(`[privateChat] failed to send ack to sender ${senderId}: ${e?.message || e}`);
             }
 
-            // Emit to recipient sockets if known
-            recipientSocketIds.forEach(socketId => this.server.to(socketId).emit('privateMessage', payload));
-
-            // Fallback: sometimes userSocketMap may be out-of-date (race conditions, reconnects, etc.).
-            // Try to find sockets by inspecting connected sockets' data.user (best-effort) and emit there.
-            if (!recipientSocketIds || recipientSocketIds.length === 0) {
-                const fallbackSockets: string[] = [];
+            // deliver to recipient if connected
+            const recipientSockets = Array.from(this.userSocketMap.get(recipientId) || []);
+            if (recipientSockets.length > 0) {
+                recipientSockets.forEach(sid => {
+                    this.server.to(sid).emit('privateChat', {
+                        id: payload.id,
+                        fromId: payload.fromId,
+                        fromName: payload.senderName,
+                        toId: payload.toId,
+                        content: payload.content,
+                        timestamp: payload.timestamp,
+                        roomId: payload.roomId,
+                        read: false,
+                        status: 'delivered'
+                    });
+                });
+                // mark delivered in DB if possible
                 try {
-                    for (const [sockId, sock] of this.server.sockets.sockets) {
-                        try {
-                            const du = (sock as any).data && (sock as any).data.user ? (sock as any).data.user : null;
-                            const duId = du ? (du.id || du._id || (du as any)._id) : null;
-                            if (duId && String(duId) === String(recipientId)) {
-                                this.logger.log(`[privateMessage-fallback] found socket ${sockId} for recipient ${recipientId}, emitting`);
-                                this.server.to(sockId).emit('privateMessage', payload);
-                                fallbackSockets.push(sockId);
-                            }
-                        } catch (inner) { /* ignore per-socket errors */ }
+                    if (typeof (this.messagesService as any).markAsDelivered === 'function') {
+                        await (this.messagesService as any).markAsDelivered(payload.id);
                     }
-                } catch (e) {
-                    this.logger.warn(`[privateMessage-fallback] error while scanning sockets: ${e?.message || e}`);
-                }
-
-                if (fallbackSockets.length > 0) {
-                    this.logger.log(`[privateMessage-fallback] emitted to ${fallbackSockets.length} fallback socket(s) for recipient ${recipientId}`);
-                } else {
-                    // Recipient appears offline — create a lightweight notification (best-effort)
-                    try {
-                        // notificationsService.create signature may vary; use a minimal payload commonly supported.
-                        if (this.notificationsService && typeof this.notificationsService.create === 'function') {
-                            const note = await this.notificationsService.create({
-                                user: recipientId,
-                                sender: senderId,
-                                title: 'Nouveau message',
-                                message: payload.content || 'Vous avez reçu un nouveau message',
-                                source: 'socket',
-                                isRead: false,
-                            });
-                            this.logger.log(`[privateMessage] recipient offline, notification created for ${recipientId} id=${(note as any)?._id || (note as any)?.id || 'unknown'}`);
-                        }
-                    } catch (nerr) {
-                        this.logger.warn(`[privateMessage] failed to create offline notification for ${recipientId}: ${nerr?.message || nerr}`);
+                } catch (e) { /* ignore */ }
+            } else {
+                // recipient offline: optionally create a notification (best-effort)
+                try {
+                    if (this.notificationsService && typeof this.notificationsService.create === 'function') {
+                        await this.notificationsService.create({
+                            user: recipientId,
+                            sender: senderId,
+                            title: 'Nouveau message',
+                            message: data.content.slice(0, 200),
+                            source: 'socket',
+                            isRead: false,
+                        });
                     }
+                } catch (nerr) {
+                    this.logger.warn(`[privateChat] failed to create offline notification for ${recipientId}: ${nerr?.message || nerr}`);
                 }
             }
-
-            // Optionally you could persist notifications here via NotificationsService
         } catch (err) {
-            this.logger.error(`[SOCKET] Failed to handle privateMessage from ${client.id}: ${err?.message || err}`);
-            client.emit('error', { message: 'Failed to send private message' });
+            this.logger.error(`[SOCKET] Failed to handle privateChat from ${client.id}: ${err?.message || err}`);
+            client.emit('error', { message: 'Failed to send private chat message' });
         }
     }
 
@@ -727,7 +837,12 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             });
             this.userSocketMap.delete(userId);
         }
-        this.server.emit('userLogout', { userId });
+        // Inform all connected clients if needed
+        try {
+            this.server.emit('userLogout', { userId });
+        } catch (e) {
+            this.logger.warn(`[SOCKET] Failed to emit userLogout for ${userId}: ${e?.message || e}`);
+        }
     }
 
     // Emit a notification payload to all connected sockets of a given userId
@@ -745,228 +860,4 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         }
     }
 
-    @SubscribeMessage('identify')
-   async handleIdentify(
-        @MessageBody() data: { userId: string },
-        @ConnectedSocket() client: Socket
-    ) {
-        if (data && data.userId) {
-            // Avant d'ajouter, supprimer ce socketId de tous les autres userId (évite mapping multiple)
-            for (const [uid, sockets] of this.userSocketMap.entries()) {
-                if (sockets.has(client.id) && uid !== data.userId) {
-                    sockets.delete(client.id);
-                    if (sockets.size === 0) this.userSocketMap.delete(uid);
-                }
-            }
-            if (!this.userSocketMap.has(data.userId)) this.userSocketMap.set(data.userId, new Set());
-            this.userSocketMap.get(data.userId)!.add(client.id);
-            this.logger.log(`[IDENTIFY] Mapping userId ${data.userId} -> socketId ${client.id}`);
-            this.logger.log(`[SOCKET MAP] userId ${data.userId} sockets: ${Array.from(this.userSocketMap.get(data.userId)!)}`);
-            const adminMessages = await this.messageForumService.getAllMessages();
-            client.emit('adminChatRoomMessages', adminMessages);
-        } else {
-            this.logger.warn('[IDENTIFY] userId manquant dans identify');
-        }
-    }
-
-    @SubscribeMessage('adminChatRoomFile')
-    async handleAdminChatRoomFile(
-        @MessageBody() data: { type: 'audio' | 'video' | 'file' | 'image'; content: string; filename: string; tempId?: string; size?: number },
-        @ConnectedSocket() client: Socket & { data?: { user?: User } },
-    ): Promise<void> {
-        const user = client.data.user;
-        if (!user || user.isAdmin !== true) {
-            this.logger.warn(`Tentative d'envoi de fichier dans le chatroom admin par un non-admin (${user?.email || 'inconnu'})`);
-            client.emit('error', { message: 'Seuls les administrateurs peuvent envoyer des fichiers dans ce chat.' });
-            return;
-        }
-
-        // Validation des données
-        if (!data?.content || !data?.type || !data?.filename) {
-            this.logger.warn(`[adminChatRoomFile] Fichier ou données invalides reçues du client ${client.id}`);
-            client.emit('error', { message: 'Fichier ou données invalides.' });
-            return;
-        }
-
-        // Validation du fichier et préparation
-    let fileBuffer = Buffer.from(data.content.split(',')[1] || data.content, 'base64');
-        try {
-            chatFileConfig.validateFile({
-                size: fileBuffer.length,
-                originalname: data.filename,
-                mimetype: data.type.includes('file') ? 'application/pdf' : `${data.type}/${data.filename.split('.').pop()}`
-            });
-        } catch (err) {
-            this.logger.warn(`[adminChatRoomFile] Validation échouée pour ${data.filename}: ${err.message}`);
-            client.emit('error', { message: err.message });
-            return;
-        }
-
-        // Compression pour les documents
-        let isCompressed = false;
-        if (data.type === 'file') {
-            try {
-                const zlib = require('zlib');
-                const compressedBuffer = zlib.gzipSync(fileBuffer);
-                fileBuffer = compressedBuffer;
-                isCompressed = true;
-                data.filename = `${data.filename}.gz`;
-            } catch (err) {
-                this.logger.warn(`[adminChatRoomFile] Compression échouée pour ${data.filename}: ${err.message}`);
-                // Continue avec le fichier non compressé
-            }
-        }
-
-        // Sauvegarde du fichier
-        const uploadDir = chatFileConfig.getUploadPath(data.type);
-        const newFilename = chatFileConfig.generateFilename(data.filename);
-        const filePathAbs = join(uploadDir, newFilename);
-
-        try {
-            writeFileSync(filePathAbs, fileBuffer);
-            this.logger.log(`[ADMIN CHATROOM] Fichier sauvegardé: ${filePathAbs}`);
-
-            // Chemin relatif pour la base de données et le frontend
-            const relativePath = `/uploads/chat/${data.type}/${newFilename}`;
-
-            // Sauvegarde en base de données
-            await this.messageForumService.createMessage({
-                user: user._id,
-                content: relativePath,
-                type: data.type,
-                filename: data.filename,
-                date: new Date(),
-                isCompressed,
-                size: fileBuffer.length
-            });
-
-            // Diffusion à tous les membres de la room
-            this.server.to('admin-chatroom').emit('adminChatRoomFile', {
-                from: {
-                    id: user._id,
-                    name: (user as any).username || '',
-                    email: user.email || '',
-                    profileUrl: user.profileUrl || '',
-                    isGoogleAuth: user.isGoogleAuth || false,
-                    isAdmin: user.isAdmin || false
-                },
-                type: data.type,
-                content: relativePath,
-                filename: data.filename,
-                date: new Date().toISOString(),
-                tempId: data.tempId || null,
-                isCompressed,
-                size: fileBuffer.length
-            });
-        } catch (err) {
-            this.logger.error(`[ADMIN CHATROOM] Erreur lors de l'enregistrement: ${err.message}`);
-            client.emit('error', { message: "Erreur lors de l'enregistrement du fichier." });
-            return;
-        }
-    }
-
-    // --- Forum Public ---
-    @SubscribeMessage('forumMessage')
-    async handleForumMessage(
-        @MessageBody() data: { content: string; type: string; filename?: string },
-        @ConnectedSocket() client: Socket & { data?: { user?: User } },
-    ): Promise<void> {
-        const user = client.data.user;
-        if (!user) {
-            client.emit('error', { message: 'Authentification requise pour le forum.' });
-            return;
-        }
-        if (!data || !data.content || !data.type) {
-            client.emit('error', { message: 'Message forum incomplet.' });
-            return;
-        }
-        let saved;
-        let filePath = null;
-        let fileType = data.type;
-        // Si c'est un fichier (image, video, audio, file)
-        if (["image", "video", "audio", "file"].includes(data.type) && data.filename) {
-            // Décoder le base64 et sauvegarder le fichier dans public/uploads/forum/
-            const fs = require('fs');
-            const path = require('path');
-            const uploadDir = path.join(process.cwd(), '..', '..', 'uploads', 'forum');
-            if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-            const ext = data.filename.split('.').pop();
-            const newName = `${Date.now()}_${Math.floor(Math.random() * 10000)}.${ext}`;
-            const filePathAbs = path.join(uploadDir, newName);
-            let base64 = data.content;
-            if (base64.startsWith('data:')) base64 = base64.split(',')[1];
-            try {
-                fs.writeFileSync(filePathAbs, Buffer.from(base64, 'base64'));
-                filePath = `/uploads/forum/${newName}`;
-                console.log(`[FORUM] Fichier sauvegardé: ${filePathAbs}`);
-            } catch (err) {
-                console.log(`[FORUM] Erreur lors de l'écriture du fichier forum: ${err.message}`);
-                client.emit('error', { message: "Erreur lors de l'enregistrement du fichier forum." });
-                return;
-            }
-            try {
-                saved = await this.messageForumService.createMessage({
-                    user: user._id,
-                    content: filePath, // chemin relatif
-                    type: fileType,
-                    date: new Date(),
-                });
-                console.log(`[FORUM] Message forum fichier enregistré en base: ${JSON.stringify(saved)}`);
-            } catch (err) {
-                console.log(`[FORUM] Erreur lors de l'enregistrement du message forum en base: ${err.message}`);
-                client.emit('error', { message: "Erreur lors de l'enregistrement du message forum en base." });
-                return;
-            }
-        } else {
-            // Message texte classique
-            console.log("le message forum est un texte", data.content);
-            try {
-                saved = await this.messageForumService.createMessage({
-                    user: user._id,
-                    content: data.content,
-                    type: "text",
-                    date: new Date(),
-                });
-            }
-            catch (err) {
-                this.logger.error(`[FORUM] Erreur lors de l'enregistrement du message forum en base: ${err.message}`);
-                client.emit('error', { message: "Erreur lors de l'enregistrement du message forum en base." });
-                return;
-            }
-
-        }
-        // Diffuser à tous les connectés au forum
-        this.server.emit('forumMessage', {
-            from: {
-                id: user._id,
-                name: (user as any).username || '',
-                email: user.email || '',
-                profileUrl: user.profileUrl || '',
-            },
-            content: filePath ? filePath : data.content,
-            type: data.type,
-            filename: data.filename || null,
-            date: saved.date,
-        });
-    }
-
-    // --- Pagination des messages admin ---
-    @SubscribeMessage('getOlderAdminMessages')
-    async handleGetOlderAdminMessages(
-        @MessageBody() data: { before?: string, limit?: number },
-        @ConnectedSocket() client: Socket & { data?: { user?: User } },
-    ) {
-        const user = client.data.user;
-        if (!user || user.isAdmin !== true) {
-            client.emit('error', { message: 'Seuls les administrateurs peuvent charger les anciens messages.' });
-            return;
-        }
-        let beforeDate: Date | undefined = undefined;
-        if (data && data.before) {
-            beforeDate = new Date(data.before);
-        }
-        const limit = data && data.limit ? Math.min(data.limit, 30) : 15;
-        const messages = await this.messageForumService.getMessagesPaginated({ before: beforeDate, limit });
-        client.emit('olderAdminMessages', messages);
-    }
-}
+} // end class ChatGateway

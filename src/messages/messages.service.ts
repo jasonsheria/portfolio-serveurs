@@ -151,15 +151,18 @@ export class MessagesService {
 
     /** Find messages optionally filtered by userId (sender or recipient). */
     async findAll(userId?: string): Promise<any[]> {
+        
         try {
+
             if (!userId) {
                 // Return last 50 messages as a basic fallback
                 const msgs = await this.messageModel.find().sort({ timestamp: -1 }).limit(50).lean().exec();
                 return msgs;
             }
-            // Search for messages where the user is sender or recipient
-            const msgs = await this.messageModel.find({ $or: [{ sender: userId }, { recipient: userId }] }).sort({ timestamp: -1 }).limit(100).lean().exec();
-            return msgs;
+                // Search for messages where the user is sender or recipient
+                const msgs = await this.messageModel.find({ $or: [{ sender: userId }]}).sort({ timestamp: -1 }).limit(100).lean().exec();
+                return msgs;
+
         } catch (error) {
             this.logger.error('Erreur findAll messages: ' + error.message, error.stack);
             return [];
