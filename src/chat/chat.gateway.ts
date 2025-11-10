@@ -246,7 +246,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
                 try {
                     let history: any[] = [];
                     try {
-                        console.log("fetching recent messages for userId:", userId);
                         history = await (this.messagesService).findAll(userId); // Adjust limit as needed
                         
                     } catch (fetchErr) {

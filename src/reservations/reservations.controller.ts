@@ -16,7 +16,6 @@ export class ReservationsController {
   @UseGuards(JwtAuthGuard)
   @Get()
   async listMyReservations(@Request() req) {
-    console.log("Fetching reservations for user:", req.user);
     const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
     return this.reservationsService.findByUser(userIdRaw);
   }
