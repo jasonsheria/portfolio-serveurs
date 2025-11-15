@@ -19,4 +19,11 @@ export class ReservationsController {
     const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
     return this.reservationsService.findByUser(userIdRaw);
   }
+  // methode deleteReservation to delete a reservation by id
+  @UseGuards(JwtAuthGuard)
+  @HttpPost('delete')
+  async deleteReservation(@Request() req, @Body() body: any) {
+    const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
+    return this.reservationsService.deleteReservation(userIdRaw, body.reservationId);
+  }
 }

@@ -124,4 +124,32 @@ export class ReservationsService {
             return [];
         }
     }
+
+    async deleteReservation(userId: string | Types.ObjectId | undefined, reservationIdRaw: string) {
+        if (!userId) {
+            throw new BadRequestException('User ID is required');
+        }
+        if (!reservationIdRaw || typeof reservationIdRaw !== 'string') {
+            throw new BadRequestException('reservationId is required');
+        }
+
+        let reservationId: Types.ObjectId;
+        try {
+            reservationId = new Types.ObjectId(reservationIdRaw);
+        } catch (e) {
+            throw new BadRequestException('Invalid reservationId format');
+        }
+
+        const reservation = await this.reservationModel.findOne({
+            _id: reservationId,
+            user: typeof userId === 'string' ? new Types.ObjectId(userId) : userId,
+        }).exec();
+
+        if (!reservation) {
+            throw new BadRequestException('Reservation not found or access denied');
+        }
+
+        await this.reservationModel.deleteOne({ _id: reservationId }).exec();
+        return { message: 'Reservation deleted successfully' };
+    }
 }
