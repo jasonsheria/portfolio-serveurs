@@ -24,7 +24,7 @@ export class UsersController {
   @UseInterceptors(FileInterceptor('profileFile', {
     storage: diskStorage({
       destination: (req, file, cb) => {
-        const uploadPath = path.join(process.cwd(), 'uploads', 'profiles');
+        const uploadPath = path.join('/uploads', 'profiles');
         if (!existsSync(uploadPath)) {
           mkdirSync(uploadPath, { recursive: true });
         }

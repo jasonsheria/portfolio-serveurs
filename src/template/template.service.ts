@@ -23,7 +23,7 @@ export class TemplateService {
     }
     // Sauvegarder les images
     const imageUrls: string[] = [];
-    const uploadDir = path.join(process.cwd(), 'uploads', 'templates', siteId);
+    const uploadDir = path.join('/uploads', 'templates', siteId);
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -66,7 +66,7 @@ export class TemplateService {
     // Suppression physique des images
     if (tpl.images && Array.isArray(tpl.images)) {
       for (const imgUrl of tpl.images) {
-        const imgPath = path.join(process.cwd(), imgUrl.startsWith('/') ? imgUrl.slice(1) : imgUrl);
+        const imgPath = path.join('/uploads', imgUrl.startsWith('/') ? imgUrl.slice(1) : imgUrl);
         try {
           if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
         } catch (err) {

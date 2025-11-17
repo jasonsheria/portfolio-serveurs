@@ -29,6 +29,58 @@ export class OwnerService {
       throw new BadRequestException('Erreur lors de la création du propriétaire: ' + error.message);
     }
   }
+
+  async createAgency(userId: Types.ObjectId, agencyData: any): Promise<Owner> {
+    try {
+      // Vérifier si l'utilisateur a déjà un compte Owner
+      let owner = await this.ownerModel.findOne({ user: userId });
+      if (owner) {
+        // Mettre à jour le compte existant en type agency
+        owner.accountType = 'agency';
+        owner.isAgency = true;
+        // owner.nom = agencyData.name || owner.nom || '';
+        // owner.email = agencyData.email || owner.email || '';
+        // owner.phone = agencyData.phone || owner.phone || '';
+        // owner.address = agencyData.address || owner.address || '';
+        owner.types = ['Agence Immobilière'];
+        owner.subscriptionType = agencyData.subscriptionType || owner.subscriptionType || 'freemium';
+        // owner.status = 'pending';
+        // owner.isActive = false;
+        // S'assurer que les champs requis sont présents
+        // owner.postnom = owner.postnom || '';
+        // owner.prenom = owner.prenom || '';
+        // owner.idFilePath = owner.idFilePath || '/uploads/default-id.pdf';
+        // owner.propertyTitlePaths = owner.propertyTitlePaths || [];
+        await owner.save();
+        return owner;
+      } else {
+        // Créer un nouveau compte agence
+        const newAgency = new this.ownerModel({
+          nom: agencyData.name || '',
+          postnom: '',
+          prenom: '',
+          email: agencyData.email || '',
+          phone: agencyData.phone || '',
+          address: agencyData.address || '',
+          types: ['Agence Immobilière'],
+          idFilePath: '/uploads/default-id.pdf',
+          propertyTitlePaths: [],
+          user: userId,
+          accountType: 'agency',
+          isAgency: true,
+          subscriptionType: agencyData.subscriptionType || 'freemium',
+          status: 'pending',
+          isActive: false,
+        });
+        return await newAgency.save();
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Erreur lors de la création ou mise à jour du compte agence: ' + error.message);
+    }
+  }
   async findByUserId(userId: Types.ObjectId) {
     try {
       let owner = await this.ownerModel.findOne({ user: userId }).populate('user');

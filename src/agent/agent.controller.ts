@@ -14,7 +14,7 @@ export class AgentController {
   @UseInterceptors(FileInterceptor('file', {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const uploadPath = path.join(process.cwd(), 'uploads', 'agents');
+          const uploadPath = path.join('/uploads', 'agents');
           try {
             if (!fs.existsSync(uploadPath)) {
               fs.mkdirSync(uploadPath, { recursive: true });

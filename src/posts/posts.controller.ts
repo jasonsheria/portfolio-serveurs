@@ -35,7 +35,7 @@ export class PostsController {
     FilesInterceptor('media', 10, {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const uploadPath = join(process.cwd(), 'uploads', 'posts');
+          const uploadPath = join('/uploads', 'posts');
           if (!existsSync(uploadPath)) {
             mkdirSync(uploadPath, { recursive: true });
           }

@@ -8,7 +8,7 @@ import { existsSync, mkdirSync } from 'fs';
 export class UploadController {
   constructor() {
     // Créer le dossier uploads s'il n'existe pas
-    const uploadsDir = join(process.cwd(), 'uploads', 'general');
+    const uploadsDir = join('/uploads', 'general');
     if (!existsSync(uploadsDir)) {
       mkdirSync(uploadsDir, { recursive: true });
     }
@@ -18,7 +18,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: (req, file, cb) => {
-        const uploadPath = join(process.cwd(), 'uploads', 'general');
+        const uploadPath = join('/uploads', 'general');
         if (!existsSync(uploadPath)) {
           mkdirSync(uploadPath, { recursive: true });
         }

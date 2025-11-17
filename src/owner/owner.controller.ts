@@ -18,6 +18,7 @@ import { RequestWithUser } from '../common/types/request.interface';
 interface UploadedOwnerFiles {
   idFile: Express.Multer.File[];
   propertyTitle: Express.Multer.File[];
+  profile?: Express.Multer.File[];
 }
 
 @Controller('owner')
@@ -38,18 +39,19 @@ export class OwnerController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileFieldsInterceptor([
     { name: 'idFile', maxCount: 1 },
-    { name: 'propertyTitle', maxCount: 10 }
+    { name: 'propertyTitle', maxCount: 10 },
+    { name: 'profile', maxCount: 3 }
   ], {
     storage: diskStorage({
       destination: (req: any, file, cb) => {
-        // Créer les dossiers de base s'ils n'existent pas
-        const baseUploadPath = join(process.cwd(), 'uploads', 'owners');
+        // Utiliser le disque persistant Render monté sur /uploads
+        const baseUploadPath = path.join('/uploads', 'owners');
         if (!existsSync(baseUploadPath)) {
           mkdirSync(baseUploadPath, { recursive: true });
         }
 
-        // Créer un dossier pour cet utilisateur
-        const userUploadPath = join(baseUploadPath, new Date().toISOString().split('T')[0]);
+        // Créer un dossier pour cet utilisateur (par date)
+        const userUploadPath = path.join(baseUploadPath, new Date().toISOString().split('T')[0]);
         if (!existsSync(userUploadPath)) {
           mkdirSync(userUploadPath, { recursive: true });
         }
@@ -91,7 +93,7 @@ export class OwnerController {
       const userId = new Types.ObjectId(req.user.id);
 
       // Validate files presence
-      if (!files || !files.idFile || files.idFile.length === 0) {
+      if (!files || !files.idFile || files.idFile.length === 0 ) {
         throw new BadRequestException('Le fichier d\'identité (idFile) est requis');
       }
 
@@ -143,6 +145,11 @@ export class OwnerController {
             if (file && file.path && existsSync(file.path)) unlinkSync(file.path);
           });
         }
+        if (files?.profile && files.profile.length) {
+          files.profile.forEach(file => {
+            if (file && file.path && existsSync(file.path)) unlinkSync(file.path);
+          });
+        }
       } catch (e) {
         // ignore cleanup errors but log
         console.warn('Error cleaning up uploaded files', e);
@@ -159,6 +166,28 @@ export class OwnerController {
           'Une erreur est survenue lors de la création de l\'owner'
         );
       }
+    }
+  }
+
+  // Create agency account (separate simplified flow)
+  @Post('/agency/create')
+  @UseGuards(JwtAuthGuard)
+  async createAgencyAccount(@Body() body: any, @Req() req: RequestWithUser) {
+   
+    try {
+      const userId = new Types.ObjectId(req.user.id);
+      const agency = await this.ownerService.createAgency(userId, body);
+      return {
+        message: 'Agency created successfully',
+        agency,
+        success: true
+      };
+    } catch (error) {
+
+      if (error instanceof BadRequestException) throw error;
+      console.error('createAgencyAccount error', error);
+      throw new InternalServerErrorException('Unable to create agency account');
+
     }
   }
 

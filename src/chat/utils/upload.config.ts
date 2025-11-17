@@ -7,7 +7,7 @@ export const chatUploadConfig = {
     destination: (req, file, cb) => {
       // Déterminer le sous-dossier selon le type de fichier
       const fileType = getFileType(file.mimetype);
-      const uploadPath = join(process.cwd(), 'uploads', 'chat', fileType);
+      const uploadPath = join('/uploads', 'chat', fileType);
       
       if (!existsSync(uploadPath)) {
         mkdirSync(uploadPath, { recursive: true });

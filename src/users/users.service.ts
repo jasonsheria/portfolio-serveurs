@@ -115,7 +115,7 @@ export class UsersService {
             // Générer un nom de fichier unique
             const ext = path.extname(file.originalname);
             const fileName = `profile_${Date.now()}_${Math.floor(Math.random()*10000)}${ext}`;
-            const profileDir = path.join(process.cwd(), 'uploads', 'profiles');
+            const profileDir = path.join('/uploads', 'profiles');
             if (!fs.existsSync(profileDir)) {
                 fs.mkdirSync(profileDir, { recursive: true });
             }
@@ -219,7 +219,7 @@ export class UsersService {
 
         // Gestion des uploads de fichiers
         const username = userToUpdate.username; // Utiliser le username pour le nom du dossier
-        const userUploadDir = path.join(process.cwd(), 'uploads', 'profiles');
+    const userUploadDir = path.join('/uploads', 'profiles');
 
         if (!fs.existsSync(userUploadDir)) {
             fs.mkdirSync(userUploadDir, { recursive: true });
@@ -236,7 +236,7 @@ export class UsersService {
                 // If multer.diskStorage was used, file.path exists and file already saved to disk
                 if (file.path) {
                     try {
-                        const rel = path.relative(process.cwd(), file.path).replace(/\\/g, '/');
+                        const rel = path.relative('/uploads', file.path).replace(/\\/g, '/');
                         const publicPath = `/${rel}`; // e.g. /uploads/profiles/xxx-file.png
                         if (entityFieldOverride) {
                             (userToUpdate as any)[entityFieldOverride] = publicPath;
@@ -260,7 +260,7 @@ export class UsersService {
                 const fileName = `${fileField}_${Date.now()}.${ext}`;
                 // choose subfolder based on fileField
                 const uploadType = (fileField === 'cvFile') ? 'cv' : (fileField === 'logoFile' || fileField === 'companyLogoFile') ? 'logos' : (fileField === 'postalCardFile') ? 'postalCards' : 'profiles';
-                const fileDir = path.join(process.cwd(), 'uploads', uploadType);
+                const fileDir = path.join('/uploads', uploadType);
                 if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
                 const filePath = path.join(fileDir, fileName);
 

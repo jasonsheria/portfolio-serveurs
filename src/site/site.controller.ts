@@ -16,7 +16,7 @@ export class SiteController {
   @UseInterceptors(FileInterceptor('service_image', {
     storage: diskStorage({
       destination: (req, file, cb) => {
-        const uploadPath = path.join(process.cwd(), 'uploads', 'services');
+        const uploadPath = path.join('/uploads', 'services');
         if (!fs.existsSync(uploadPath)) {
           fs.mkdirSync(uploadPath, { recursive: true });
         }

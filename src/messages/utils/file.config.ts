@@ -26,7 +26,7 @@ export const multerConfig = {
       const fileType = getFileType(file.originalname);
       
       // Create base uploads/messages folder if it doesn't exist
-      const baseUploadPath = join(process.cwd(), 'uploads', 'messages'); 
+      const baseUploadPath = join('/uploads', 'messages'); 
       if (!fs.existsSync(baseUploadPath)) {
         fs.mkdirSync(baseUploadPath, { recursive: true });
       }

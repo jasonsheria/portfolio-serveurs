@@ -41,7 +41,7 @@ export class MobilierController {
         if (file.fieldname === 'documents') uploadType = 'documents';
 
         const dateFolder = new Date().toISOString().split('T')[0];
-        const uploadPath = join(process.cwd(), 'uploads', 'mobilier', uploadType, dateFolder);
+        const uploadPath = join('/uploads', 'mobilier', uploadType, dateFolder);
         
         if (!existsSync(uploadPath)) {
           mkdirSync(uploadPath, { recursive: true });
