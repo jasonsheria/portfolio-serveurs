@@ -6,13 +6,7 @@ import { existsSync, mkdirSync } from 'fs';
 
 @Controller('upload')
 export class UploadController {
-  constructor() {
-    // Créer le dossier uploads s'il n'existe pas
-    const uploadsDir = join('/uploads', 'general');
-    if (!existsSync(uploadsDir)) {
-      mkdirSync(uploadsDir, { recursive: true });
-    }
-  }
+  // Suppression de la création automatique du dossier, le disque persistant Render gère déjà /uploads/general
 
   @Post('image')
   @UseInterceptors(FileInterceptor('file', {
