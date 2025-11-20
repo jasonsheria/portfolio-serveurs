@@ -15,6 +15,12 @@ export class Evenement extends Document {
 
   @Prop({ default: Date.now })
   date: Date;
+  
+    @Prop({ default: 'pending' })
+    status: string; // pending, confirmed, cancelled
+  
+    @Prop({ type: Types.ObjectId, ref: 'Reservation', required: false })
+    reservationId?: Types.ObjectId;
 }
 
 export const EvenementSchema = SchemaFactory.createForClass(Evenement);

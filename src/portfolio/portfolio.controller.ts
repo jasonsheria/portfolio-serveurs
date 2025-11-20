@@ -35,7 +35,7 @@ export class PortfolioController {
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: (req, file, cb) => {
-        const uploadPath = path.join('/uploads', 'portfolio');
+        const uploadPath = path.join(process.cwd(), 'uploads', 'portfolio');
         if (!fs.existsSync(uploadPath)) {
           fs.mkdirSync(uploadPath, { recursive: true });
         }

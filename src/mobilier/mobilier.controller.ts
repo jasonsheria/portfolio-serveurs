@@ -41,12 +41,13 @@ export class MobilierController {
         if (file.fieldname === 'documents') uploadType = 'documents';
 
         const dateFolder = new Date().toISOString().split('T')[0];
-        const uploadPath = join('/uploads', 'mobilier', uploadType, dateFolder);
-        
+        // Use process.cwd() + /uploads for persistent disk on Render
+        const uploadPath = join(process.cwd(), 'uploads', 'mobilier', uploadType, dateFolder);
+
         if (!existsSync(uploadPath)) {
           mkdirSync(uploadPath, { recursive: true });
         }
-        
+
         cb(null, uploadPath);
       },
       filename: (req, file, cb) => {

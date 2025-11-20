@@ -12,7 +12,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: (req, file, cb) => {
-        const uploadPath = join('/uploads', 'general');
+        const uploadPath = join(process.cwd(), 'uploads', 'general');
         if (!existsSync(uploadPath)) {
           mkdirSync(uploadPath, { recursive: true });
         }

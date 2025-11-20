@@ -45,7 +45,7 @@ export class OwnerController {
     storage: diskStorage({
       destination: (req: any, file, cb) => {
         // Utiliser le disque persistant Render monté sur /uploads
-        const baseUploadPath = path.join('/uploads', 'owners');
+        const baseUploadPath = path.join(process.cwd(), 'uploads', 'owners');
         if (!existsSync(baseUploadPath)) {
           mkdirSync(baseUploadPath, { recursive: true });
         }
