@@ -9,6 +9,9 @@ export class Reservation extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: false })
   user?: Types.ObjectId; // user who made the reservation (may be anonymous)
 
+  @Prop({ type: Types.ObjectId, ref: 'Owner', required: false })
+  owner?: Types.ObjectId; // owner of the property
+
   @Prop()
   date?: string;
 
@@ -23,6 +26,9 @@ export class Reservation extends Document {
 
   @Prop()
   status?: string; // pending, confirmed, cancelled
+
+  @Prop()
+  name? : string
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);

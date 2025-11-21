@@ -1,3 +1,4 @@
+
 import { Controller, Post as HttpPost, Body, Request, UseGuards, Get } from '@nestjs/common';
 import { ReservationsService } from './reservations.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -5,6 +6,22 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @Controller('reservations')
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
+
+  // Confirmer une réservation
+  @UseGuards(JwtAuthGuard)
+  @HttpPost('confirm')
+  async confirmReservation(@Request() req, @Body() body: any) {
+    const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
+    return this.reservationsService.confirmReservation(userIdRaw, body.reservationId);
+  }
+
+  // Rejeter/annuler une réservation
+  @UseGuards(JwtAuthGuard)
+  @HttpPost('reject')
+  async rejectReservation(@Request() req, @Body() body: any) {
+    const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
+    return this.reservationsService.rejectReservation(userIdRaw, body.reservationId);
+  }
 
   @UseGuards(JwtAuthGuard)
   @HttpPost()
@@ -25,5 +42,12 @@ export class ReservationsController {
   async deleteReservation(@Request() req, @Body() body: any) {
     const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
     return this.reservationsService.deleteReservation(userIdRaw, body.reservationId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('owner-reservations')
+  async listOwnerReservations(@Request() req) {
+    const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
+    return this.reservationsService.findByOwner(userIdRaw);
   }
 }
