@@ -14,28 +14,33 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import type { Express } from 'express';
-import { multerConfig } from './utils/upload.config';
+import { UploadService } from '../upload/upload.service';
 
 
 @Controller('auth')
 export class AuthController {
-  private readonly logger = new Logger(AuthController.name); // Logger
+  private readonly logger = new Logger(AuthController.name);
 
   constructor(
     private readonly authService: AuthService,
     private readonly userService: UsersService,
-    private readonly chatGateway: ChatGateway, // Injection de la gateway
+    private readonly chatGateway: ChatGateway,
+    private readonly uploadService: UploadService,
   ) { }
 
-
-
   @Post('register')
-  @UseInterceptors(FileInterceptor('profileImage', multerConfig))
+  @UseInterceptors(FileInterceptor('profileImage'))
   @HttpCode(HttpStatus.CREATED)
   async register(
     @Body() registerDto: RegisterDto,
     @UploadedFile() profileImage: Express.Multer.File
   ) {
+    // Validate file if provided
+    if (profileImage) {
+      const validation = this.uploadService.validateImageFile(profileImage);
+      if (!validation.valid) throw new BadRequestException(validation.error);
+    }
+
     const verificationToken = uuidv4();
     await this.authService.register(
       { ...registerDto, isVerified: false, verificationToken },
@@ -151,7 +156,6 @@ export class AuthController {
     this.chatGateway.notifyUserLogout(userId);
     return { message: 'Déconnexion réussie' };
   }
-  // creer une fonction pour mettre en jour le user present dans userService
   @UseGuards(JwtAuthGuard)
   @Patch('update-profile')
   @HttpCode(HttpStatus.OK)
@@ -163,7 +167,7 @@ export class AuthController {
     { name: 'logoFile', maxCount: 1 },
     { name: 'postalCardFile', maxCount: 1 },
     { name: 'companyLogoFile', maxCount: 1 },
-  ], multerConfig))
+  ]))
   async updateProfile(
     @Request() req,
     @Body() updateUserDto: UpdateUserDto,
@@ -181,6 +185,36 @@ export class AuthController {
     this.logger.debug(`Mise à jour du profil pour l'utilisateur: ${userId}`);
 
     try {
+      // Validate all files if provided
+      if (files.profileImage1 && files.profileImage1.length > 0) {
+        const validation = this.uploadService.validateImageFile(files.profileImage1[0]);
+        if (!validation.valid) throw new BadRequestException(validation.error);
+      }
+      if (files.profileImage2 && files.profileImage2.length > 0) {
+        const validation = this.uploadService.validateImageFile(files.profileImage2[0]);
+        if (!validation.valid) throw new BadRequestException(validation.error);
+      }
+      if (files.profileImage3 && files.profileImage3.length > 0) {
+        const validation = this.uploadService.validateImageFile(files.profileImage3[0]);
+        if (!validation.valid) throw new BadRequestException(validation.error);
+      }
+      if (files.logoFile && files.logoFile.length > 0) {
+        const validation = this.uploadService.validateImageFile(files.logoFile[0]);
+        if (!validation.valid) throw new BadRequestException(validation.error);
+      }
+      if (files.companyLogoFile && files.companyLogoFile.length > 0) {
+        const validation = this.uploadService.validateImageFile(files.companyLogoFile[0]);
+        if (!validation.valid) throw new BadRequestException(validation.error);
+      }
+      if (files.cvFile && files.cvFile.length > 0) {
+        const validation = this.uploadService.validateDocumentFile(files.cvFile[0]);
+        if (!validation.valid) throw new BadRequestException(validation.error);
+      }
+      if (files.postalCardFile && files.postalCardFile.length > 0) {
+        const validation = this.uploadService.validateDocumentFile(files.postalCardFile[0]);
+        if (!validation.valid) throw new BadRequestException(validation.error);
+      }
+
       const updatedUser = await this.userService.updateUser(String(userId), updateUserDto, files);
       return { 
         message: 'Profil mis à jour avec succès',

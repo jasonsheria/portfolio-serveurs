@@ -6,57 +6,43 @@ import { Express } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CurrentUser } from './current-user.decorator';
-import { diskStorage } from 'multer';
-import { join, extname } from 'path';
-import { existsSync, mkdirSync } from 'fs';
-import * as path from 'path';
+import { UploadService } from '../upload/upload.service';
 
 @Controller('users')
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly authService: AuthService,
+    private readonly uploadService: UploadService,
   ) {}
 
   // Route de mise à jour du profil utilisateur (hors email/password)
   @UseGuards(JwtAuthGuard)
   @Put('profile/:id')
-  @UseInterceptors(FileInterceptor('profileFile', {
-    storage: diskStorage({
-      destination: (req, file, cb) => {
-        const uploadPath = path.join('/uploads', 'profiles');
-        if (!existsSync(uploadPath)) {
-          mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-      },
-      filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, `profile-${uniqueSuffix}${extname(file.originalname)}`);
-      },
-    }),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-    fileFilter: (req, file, cb) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-        return cb(new Error('Seuls les fichiers jpg, jpeg, png et gif sont autorisés'), false);
-      }
-      cb(null, true);
-    },
-  }))
+  @UseInterceptors(FileInterceptor('profileFile'))
   async updateProfile(
     @Param('id') id: string,
     @Body() updateData: any,
     @UploadedFile() profileFile?: any,
     @Req() req?: any
   ) {
+    // Validate file if provided
+    if (profileFile) {
+      const validation = this.uploadService.validateImageFile(profileFile);
+      if (!validation.valid) throw new BadRequestException(validation.error);
+    }
+
     // Sécurité : l'utilisateur ne peut mettre à jour que son propre profil
     if (req.user && req.user._id && req.user._id.toString() !== id) {
       throw new BadRequestException('Vous ne pouvez modifier que votre propre profil.');
     }
+
     // Ajout du fichier uploadé si présent
     if (profileFile) {
-      updateData.profileFile = `/uploads/profiles/${profileFile.filename}`;
+      const fileResponse = this.uploadService.createUploadResponse(profileFile, 'profiles');
+      updateData.profileFile = fileResponse.url;
     }
+
     return this.usersService.updateUser(id, updateData);
   }
 

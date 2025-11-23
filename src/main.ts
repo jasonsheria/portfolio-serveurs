@@ -107,9 +107,11 @@ async function bootstrap() {
     transform: true,
   }));
   // Utiliser le dossier 'uploads' du projet pour servir les fichiers statiques
-  const uploadsAbsolutePath = path.join(process.cwd(), 'uploads');
-  console.log(`[STATIC] Serving uploads from: ${uploadsAbsolutePath}`);
-  app.useStaticAssets(uploadsAbsolutePath, {
+  // En production (Render), utiliser le disque persistant /upload
+  // En local, utiliser le dossier uploads du projet
+  const uploadsPath = process.env.NODE_ENV === 'production' ? '/upload' : path.join(process.cwd(), 'uploads');
+  console.log(`[STATIC] Serving uploads from: ${uploadsPath}`);
+  app.useStaticAssets(uploadsPath, {
     prefix: '/uploads', // Ce préfixe doit correspondre à celui utilisé dans pictureUrl
     fallthrough: false, // Pour que les erreurs soient catchées ici
   });

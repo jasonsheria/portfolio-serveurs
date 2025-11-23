@@ -18,14 +18,15 @@ import {
 import { MobilierService } from './mobilier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
 import { Types } from 'mongoose';
+import { UploadService } from '../upload/upload.service';
 
 @Controller('mobilier')
 export class MobilierController {
-  constructor(private readonly mobilierService: MobilierService) {}
+  constructor(
+    private readonly mobilierService: MobilierService,
+    private readonly uploadService: UploadService
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -33,58 +34,7 @@ export class MobilierController {
     { name: 'images', maxCount: 10 },
     { name: 'videos', maxCount: 5 },
     { name: 'documents', maxCount: 5 }
-  ], {
-    storage: diskStorage({
-      destination: (req: any, file, cb) => {
-        let uploadType = 'images';
-        if (file.fieldname === 'videos') uploadType = 'videos';
-        if (file.fieldname === 'documents') uploadType = 'documents';
-
-        const dateFolder = new Date().toISOString().split('T')[0];
-        // Use process.cwd() + /uploads for persistent disk on Render
-        const uploadPath = join(process.cwd(), 'uploads', 'mobilier', uploadType, dateFolder);
-
-        if (!existsSync(uploadPath)) {
-          mkdirSync(uploadPath, { recursive: true });
-        }
-
-        cb(null, uploadPath);
-      },
-      filename: (req, file, cb) => {
-        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-        cb(null, `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`);
-      }
-    }),
-    fileFilter: (req, file, cb) => {
-      // Relaxed checks: images must start with image/, videos with video/, documents pdf
-      try {
-        if (file.fieldname === 'images') {
-          if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-            return cb(new Error('Seules les images (jpg, jpeg, png...) sont autorisées'), false);
-          }
-        } else if (file.fieldname === 'videos') {
-          if (!file.mimetype || !file.mimetype.startsWith('video/')) {
-            return cb(new Error('Seules les vidéos (mp4, webm, mov, ...) sont autorisées'), false);
-          }
-        } else if (file.fieldname === 'documents') {
-          if (!file.mimetype || !file.mimetype.match(/\/(pdf)$/)) {
-            return cb(new Error('Seuls les documents PDF sont autorisés'), false);
-          }
-        }
-
-        // Optional size check if multer provides size
-        if (typeof file.size === 'number' && file.size > 20 * 1024 * 1024) { // 20MB max server-side
-          return cb(new Error('La taille du fichier ne doit pas dépasser 20MB'), false);
-        }
-
-        cb(null, true);
-      } catch (e) {
-        // fallback to accepting the file so the request can be inspected
-        console.warn('fileFilter error', e);
-        cb(null, true);
-      }
-    }
-  }))
+  ]))
   async create(
     @Req() req,
     @Body('data') dataString: string,
@@ -95,37 +45,52 @@ export class MobilierController {
     }
   ) {
     try {
-      // Debug: log incoming files structure to help diagnose missing uploads
-      try { console.log('CREATE.received files keys:', Object.keys(files || {})); } catch(e){}
-      try { console.log('CREATE.files.images count:', (files.images||[]).length, 'videos count:', (files.videos||[]).length, 'documents count:', (files.documents||[]).length); } catch(e){}
+      // Validate files if provided
+      if (files.images && files.images.length > 0) {
+        const imageValidation = this.uploadService.validateImageFiles(files.images);
+        if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
+      }
+
+      // Note: Videos validation - using generic file validation (size only, no MIME check)
+      if (files.videos && files.videos.length > 0) {
+        const videoValidation = this.uploadService.validateGenericFile(files.videos[0], 50);
+        if (!videoValidation.valid) throw new BadRequestException(videoValidation.error);
+      }
+
+      // Validate documents (PDFs)
+      if (files.documents && files.documents.length > 0) {
+        const docValidation = this.uploadService.validateDocumentFile(files.documents[0]);
+        if (!docValidation.valid) throw new BadRequestException(docValidation.error);
+      }
+
       const data = JSON.parse(dataString);
       const userId = req.user.userId;
       const userType = req.user.type || 'User';
 
-      // Formater les chemins des fichiers
-      const formattedFiles = {
-        images: files.images?.map(file => this.formatFilePath(file.path)) || [],
-        videos: files.videos?.map(file => this.formatFilePath(file.path)) || [],
-        documents: files.documents?.map(file => this.formatFilePath(file.path)) || []
-      };
+      // Create standardized responses
+      const imageResponses = files.images 
+        ? this.uploadService.createBulkUploadResponse(files.images, 'mobilier/images')
+        : [];
+      const videoResponses = files.videos 
+        ? this.uploadService.createBulkUploadResponse(files.videos, 'mobilier/videos')
+        : [];
+      const documentResponses = files.documents 
+        ? this.uploadService.createBulkUploadResponse(files.documents, 'mobilier/documents')
+        : [];
 
-      try { console.log('CREATE.formattedFiles:', formattedFiles); } catch(e){}
-
-      // If the client provided an agentId, convert it to ObjectId and store under `agent`
       const createPayload: any = {
         ...data,
         proprietaire: new Types.ObjectId(userId),
         proprietaireType: userType,
-        images: formattedFiles.images,
-        videos: formattedFiles.videos,
-        documents: formattedFiles.documents
+        images: imageResponses.map(r => r.url),
+        videos: videoResponses.map(r => r.url),
+        documents: documentResponses.map(r => r.url)
       };
 
       if (data && data.agentId) {
         try {
           createPayload.agent = new Types.ObjectId(data.agentId);
         } catch (e) {
-          // If conversion fails, ignore the agent field rather than crashing
           console.warn('Invalid agentId provided, ignoring agent field', data.agentId);
         }
       }
@@ -189,55 +154,7 @@ export class MobilierController {
     { name: 'newImages', maxCount: 10 },
     { name: 'newVideos', maxCount: 5 },
     { name: 'newDocuments', maxCount: 5 }
-  ], {
-    storage: diskStorage({
-      destination: (req: any, file, cb) => {
-        let uploadType = 'images';
-        if (file.fieldname === 'newVideos') uploadType = 'videos';
-        if (file.fieldname === 'newDocuments') uploadType = 'documents';
-
-        const dateFolder = new Date().toISOString().split('T')[0];
-        const uploadPath = join(process.cwd(), 'uploads', 'mobilier', uploadType, dateFolder);
-        
-        if (!existsSync(uploadPath)) {
-          mkdirSync(uploadPath, { recursive: true });
-        }
-        
-        cb(null, uploadPath);
-      },
-      filename: (req, file, cb) => {
-        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-        cb(null, `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`);
-      }
-    }),
-    fileFilter: (req, file, cb) => {
-      // mirror the create() fileFilter but for new* fieldnames
-      try {
-        if (file.fieldname === 'newImages') {
-          if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-            return cb(new Error('Seules les images (jpg, jpeg, png...) sont autorisées'), false);
-          }
-        } else if (file.fieldname === 'newVideos') {
-          if (!file.mimetype || !file.mimetype.startsWith('video/')) {
-            return cb(new Error('Seules les vidéos (mp4, webm, mov, ...) sont autorisées'), false);
-          }
-        } else if (file.fieldname === 'newDocuments') {
-          if (!file.mimetype || !file.mimetype.match(/\/(pdf)$/)) {
-            return cb(new Error('Seuls les documents PDF sont autorisés'), false);
-          }
-        }
-
-        if (typeof file.size === 'number' && file.size > 20 * 1024 * 1024) { // 20MB
-          return cb(new Error('La taille du fichier ne doit pas dépasser 20MB'), false);
-        }
-
-        cb(null, true);
-      } catch (e) {
-        console.warn('update fileFilter error', e);
-        cb(null, true);
-      }
-    }
-  }))
+  ]))
   async update(
     @Param('id') id: string,
     @Req() req,
@@ -249,36 +166,50 @@ export class MobilierController {
     }
   ) {
     try {
-      // Debug: log incoming auth header and user payload for troubleshooting
-      try { console.log('UPDATE.authorization header:', req.headers?.authorization); } catch(e){}
-      try { console.log('UPDATE.req.user:', JSON.stringify(req.user)); } catch(e) { console.log('UPDATE.req.user (raw):', req.user); }
+      // Validate new files if provided
+      if (files.newImages && files.newImages.length > 0) {
+        const imageValidation = this.uploadService.validateImageFiles(files.newImages);
+        if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
+      }
+
+      if (files.newVideos && files.newVideos.length > 0) {
+        const videoValidation = this.uploadService.validateGenericFile(files.newVideos[0], 50);
+        if (!videoValidation.valid) throw new BadRequestException(videoValidation.error);
+      }
+
+      if (files.newDocuments && files.newDocuments.length > 0) {
+        const docValidation = this.uploadService.validateDocumentFile(files.newDocuments[0]);
+        if (!docValidation.valid) throw new BadRequestException(docValidation.error);
+      }
+
       const data = JSON.parse(dataString);
       const userId = req.user.userId;
       const userType = req.user.type || 'User';
 
       // Vérifier que l'utilisateur est bien le propriétaire
-  const mobilier = await this.mobilierService.findOne(id);
-  try { console.log('UPDATE.mobilier.proprietaire (raw):', mobilier?.proprietaire, 'toString:', mobilier?.proprietaire?.toString?.()); } catch(e){}
-      // Allow if the requesting user is the owner (compare ids). Don't fail when token lacks type claim.
+      const mobilier = await this.mobilierService.findOne(id);
       if (!mobilier || mobilier.proprietaire._id.toString() !== userId) {
-        // audit log to help debugging mismatched ownership/auth issues
         console.warn(`Unauthorized update attempt on mobilier ${id} by user ${userId}. proprietaire=${mobilier?.proprietaire?._id?.toString()} proprietaireType=${mobilier?.proprietaireType} tokenType=${userType}`);
         throw new BadRequestException('Non autorisé à modifier ce bien');
       }
 
-      // Formater les nouveaux fichiers
-      const newFiles = {
-        images: files.newImages?.map(file => this.formatFilePath(file.path)) || [],
-        videos: files.newVideos?.map(file => this.formatFilePath(file.path)) || [],
-        documents: files.newDocuments?.map(file => this.formatFilePath(file.path)) || []
-      };
+      // Create standardized responses for new files
+      const newImageResponses = files.newImages 
+        ? this.uploadService.createBulkUploadResponse(files.newImages, 'mobilier/images')
+        : [];
+      const newVideoResponses = files.newVideos 
+        ? this.uploadService.createBulkUploadResponse(files.newVideos, 'mobilier/videos')
+        : [];
+      const newDocumentResponses = files.newDocuments 
+        ? this.uploadService.createBulkUploadResponse(files.newDocuments, 'mobilier/documents')
+        : [];
 
       // Mettre à jour avec les anciennes et nouvelles images
       const updateData: any = {
         ...data,
-        images: [...(data.keepImages || []), ...newFiles.images],
-        videos: [...(data.keepVideos || []), ...newFiles.videos],
-        documents: [...(data.keepDocuments || []), ...newFiles.documents]
+        images: [...(data.keepImages || []), ...newImageResponses.map(r => r.url)],
+        videos: [...(data.keepVideos || []), ...newVideoResponses.map(r => r.url)],
+        documents: [...(data.keepDocuments || []), ...newDocumentResponses.map(r => r.url)]
       };
 
       // If client provided agentId in the data, convert it to ObjectId. Allow clearing the agent when an empty string or null is provided.
@@ -323,26 +254,5 @@ export class MobilierController {
     }
 
     return this.mobilierService.remove(id);
-  }
-
-  private formatFilePath(fullPath: string): string {
-    const relativePath = fullPath.split('uploads')[1];
-    return `/uploads${relativePath}`.replace(/\\/g, '/');
-  }
-
-  @Get('images/:dateFolder/:filename')
-  async serveImage(
-    @Param('dateFolder') dateFolder: string,
-    @Param('filename') filename: string,
-    @Req() req,
-    @Res() res
-  ) {
-    const imagePath = join(process.cwd(), 'uploads', 'mobilier', 'images', dateFolder, filename);
-    
-    if (!existsSync(imagePath)) {
-      throw new NotFoundException('Image non trouvée');
-    }
-    
-    return res.sendFile(imagePath);
   }
 }

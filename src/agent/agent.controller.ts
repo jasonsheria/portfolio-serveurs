@@ -1,45 +1,31 @@
 import { Controller, Get, Post, Body, Param, Put, Delete, UploadedFile, BadRequestException, UseInterceptors, Query, UseGuards, Req, InternalServerErrorException, UsePipes, ValidationPipe } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as path from 'path';
-import * as fs from 'fs';
 import { AgentService } from './agent.service';
+import { UploadService } from '../upload/upload.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('agents')
 export class AgentController {
-  constructor(private readonly agentService: AgentService) {}
+  constructor(
+    private readonly agentService: AgentService,
+    private readonly uploadService: UploadService,
+  ) {}
+
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadPath = path.join('/uploads', 'agents');
-          try {
-            if (!fs.existsSync(uploadPath)) {
-              fs.mkdirSync(uploadPath, { recursive: true });
-            }
-            cb(null, uploadPath);
-          } catch (err) {
-            cb(err, uploadPath);
-          }
-        },
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname);
-          const filename = `agents_${Date.now()}${ext}`;
-          cb(null, filename);
-        },
-      }),
-      fileFilter: (req, file, cb) => {
-        if (file.mimetype && file.mimetype.startsWith('image/')) cb(null, true);
-        else cb(null, false);
-      },
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-    }))
-    async uploadFile(@UploadedFile() file: Express.Multer.File) {
-      if (!file) throw new BadRequestException('Aucun fichier reçu');
-      return { url: `/uploads/agents/${file.filename}` };
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Aucun fichier reçu');
+
+    // Valider l'image
+    const validation = this.uploadService.validateImageFile(file);
+    if (!validation.valid) {
+      throw new BadRequestException(validation.error);
     }
+
+    // Retourner réponse standardisée
+    return this.uploadService.createUploadResponse(file, 'agents');
+  }
   
   
 

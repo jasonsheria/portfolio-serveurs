@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: apiena
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    plan: standard
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    disk:
+      name: upload-storage
+      mountPath: /upload
+      sizeGB: 10

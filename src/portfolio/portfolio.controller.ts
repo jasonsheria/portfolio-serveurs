@@ -1,13 +1,14 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { PortfolioService } from './portfolio.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as path from 'path';
-import * as fs from 'fs';
+import { UploadService } from '../upload/upload.service';
 
 @Controller('portfolio')
 export class PortfolioController {
-  constructor(private readonly portfolioService: PortfolioService) {}
+  constructor(
+    private readonly portfolioService: PortfolioService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Post()
   async create(@Body() body: any) {
@@ -32,30 +33,16 @@ export class PortfolioController {
   }
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: (req, file, cb) => {
-        const uploadPath = path.join(process.cwd(), 'uploads', 'portfolio');
-        if (!fs.existsSync(uploadPath)) {
-          fs.mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-      },
-      filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, `portfolio-${uniqueSuffix}${path.extname(file.originalname)}`);
-      },
-    }),
-    fileFilter: (req, file, cb) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-        return cb(new Error('Seuls les fichiers jpg, jpeg, png et gif sont autorisés'), false);
-      }
-      cb(null, true);
-    },
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-  }))
+  @UseInterceptors(FileInterceptor('file'))
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Aucun fichier reçu');
-    return { url: `/uploads/portfolio/${file.filename}` };
+    
+    // Validate file
+    const validation = this.uploadService.validateImageFile(file);
+    if (!validation.valid) throw new BadRequestException(validation.error);
+
+    // Create standardized response
+    const fileResponse = this.uploadService.createUploadResponse(file, 'portfolio');
+    return { url: fileResponse.url };
   }
 }

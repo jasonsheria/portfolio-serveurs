@@ -1,60 +1,42 @@
-import { Controller, Post, Body, UseGuards, Request, Get, UseInterceptors, UploadedFile, Param, Delete, HttpCode, HttpStatus, Patch } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, UseInterceptors, UploadedFile, Param, Delete, HttpCode, HttpStatus, Patch, BadRequestException } from '@nestjs/common';
 import { SiteService } from './site.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { v4 as uuidv4 } from 'uuid';
-import * as path from 'path';
-import * as fs from 'fs';
+import { UploadService } from '../upload/upload.service';
 
 @Controller('site')
 export class SiteController {
-  constructor(private readonly siteService: SiteService) {}
+  constructor(
+    private readonly siteService: SiteService,
+    private readonly uploadService: UploadService
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('save')
-  @UseInterceptors(FileInterceptor('service_image', {
-    storage: diskStorage({
-      destination: (req, file, cb) => {
-        const uploadPath = path.join(process.cwd(), 'uploads', 'services');
-        if (!fs.existsSync(uploadPath)) {
-          fs.mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-      },
-      filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, `service-${uniqueSuffix}${path.extname(file.originalname)}`);
-      },
-    }),
-    fileFilter: (req, file, cb) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-        return cb(new Error('Seuls les fichiers jpg, jpeg, png et gif sont autorisés'), false);
-      }
-      cb(null, true);
-    },
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-  }))
-  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('service_image'))
   async saveSite(
     @Request() req,
     @Body() body: any,
     @UploadedFile() file?: Express.Multer.File
   ) {
+    // Validate file if provided
+    if (file) {
+      const validation = this.uploadService.validateImageFile(file);
+      if (!validation.valid) throw new BadRequestException(validation.error);
+    }
+
     const user = req.user;
-    // Correction : extraire l'ID utilisateur depuis le JWT (userId ou sub)
     const userId = user.userId || user.sub || user._id || user.id;
     
     let finalImagePath = undefined;
     if (file) {
-      // Enregistre l'image uploadée dans /upload/services
-      const fileName = path.basename(file.filename);
-      finalImagePath = `/uploads/services/${fileName}`;
+      // Create standardized response
+      const fileResponse = this.uploadService.createUploadResponse(file, 'services');
+      finalImagePath = fileResponse.url;
       body.service_image = finalImagePath;
     }
-    // Correction ici : forcer le champ user à être un id (string ou ObjectId)
+    
     body.user = userId;
- 
     const result = await this.siteService.createOrUpdateSite({ ...user, _id: userId }, body);
     return { success: true, ...result };
   }

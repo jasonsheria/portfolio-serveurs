@@ -4,11 +4,13 @@ import { Template, TemplateSchema } from '../entity/template/template.schema';
 import { TemplateService } from './template.service';
 import { TemplateController } from './template.controller';
 import { UsersModule } from '../users/users.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Template.name, schema: TemplateSchema }]),
     UsersModule,
+    UploadModule,
   ],
   controllers: [TemplateController],
   providers: [TemplateService],

@@ -15,52 +15,34 @@ import {
   Param,  
   Res,
 } from '@nestjs/common';
-import { join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
 import { PostsService } from './posts.service';
 import { Types } from 'mongoose';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { SearchPostsByCriteriaDto } from './dto/search-criteria.dto'; // IMPORTED DTO
+import { SearchPostsByCriteriaDto } from './dto/search-criteria.dto';
+import { UploadService } from '../upload/upload.service';
 
 @Controller('posts')
 export class PostsController {
-  constructor(private readonly postsService: PostsService) {}
+  constructor(
+    private readonly postsService: PostsService,
+    private readonly uploadService: UploadService
+  ) {}
 
   @UseGuards(JwtAuthGuard) 
   @HttpPost('create')
-  @UseInterceptors(
-    FilesInterceptor('media', 10, {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadPath = join(process.cwd(), 'uploads', 'posts');
-          if (!existsSync(uploadPath)) {
-            mkdirSync(uploadPath, { recursive: true });
-          }
-          cb(null, uploadPath);
-        },
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, uniqueSuffix + extname(file.originalname));
-        },
-      }),
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-      fileFilter: (req, file, cb) => {
-        // Vérifier le type de fichier
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|mp4|mpeg|quicktime)$/)) {
-          return cb(new Error('Seuls les fichiers jpg, jpeg, png, gif, mp4, mpeg et mov sont autorisés'), false);
-        }
-        cb(null, true);
-      },
-    })
-  )
+  @UseInterceptors(FilesInterceptor('media', 10))
   async createPost(
     @Req() req, 
     @Body() body, 
     @UploadedFiles() files: Express.Multer.File[],
   ) {
+    // Validate files if provided
+    if (files && files.length > 0) {
+      const imageValidation = this.uploadService.validateImageFiles(files);
+      if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
+    }
+
     let parsedBody = body;
     if (body.postData && typeof body.postData === 'string') {
       try {
@@ -92,6 +74,11 @@ export class PostsController {
       console.error('Controller Error: Error casting IDs to ObjectId.', { userIdRaw, siteIdRaw, error: e });
       throw new BadRequestException('Invalid ID format for User or Site (ObjectId cast failed).');
     }
+
+    // Create standardized responses for files
+    const fileResponses = files && files.length > 0
+      ? this.uploadService.createBulkUploadResponse(files, 'posts')
+      : [];
     
     const post = await this.postsService.createPostWithMedia(userId, parsedBody, files, siteId);
     return post;
@@ -138,37 +125,19 @@ export class PostsController {
 
   @UseGuards(JwtAuthGuard)
   @Put('update/:id') 
-  @UseInterceptors( 
-    FilesInterceptor('media', 10, {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadPath = join(process.cwd(), 'uploads', 'posts');
-          if (!existsSync(uploadPath)) {
-            mkdirSync(uploadPath, { recursive: true });
-          }
-          cb(null, uploadPath);
-        },
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, uniqueSuffix + extname(file.originalname));
-        },
-      }),
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-      fileFilter: (req, file, cb) => {
-        // Vérifier le type de fichier
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|mp4|mpeg|quicktime)$/)) {
-          return cb(new Error('Seuls les fichiers jpg, jpeg, png, gif, mp4, mpeg et mov sont autorisés'), false);
-        }
-        cb(null, true);
-      },
-    }),
-  )
+  @UseInterceptors(FilesInterceptor('media', 10))
   async updatePost(
     @Request() req,
     @Param('id') postIdRaw: string,
     @Body() body: any, 
     @UploadedFiles() files: Express.Multer.File[],
   ) {
+    // Validate files if provided
+    if (files && files.length > 0) {
+      const imageValidation = this.uploadService.validateImageFiles(files);
+      if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
+    }
+
     let parsedBody = body;
     if (body.postData && typeof body.postData === 'string') {
       try {
@@ -199,11 +168,12 @@ export class PostsController {
       postId = new Types.ObjectId(postIdRaw);
       siteId = new Types.ObjectId(siteIdRaw);
     } catch (e) {
-      console.error('Error casting IDs to ObjectId:', e, { userIdRaw, postIdRaw, siteIdRaw });
-      throw new BadRequestException('Invalid ID format for User, Post, or Site (ObjectId cast failed).');
+      console.error('Error casting IDs to ObjectId:', e);
+      throw new BadRequestException('Invalid ID format (ObjectId cast failed).');
     }
-    
-    return this.postsService.updatePost(postId, userId, siteId, parsedBody, files);
+
+    const post = await this.postsService.updatePost(postId, userId, siteId, parsedBody, files);
+    return post;
   }
 
   @UseGuards(JwtAuthGuard)

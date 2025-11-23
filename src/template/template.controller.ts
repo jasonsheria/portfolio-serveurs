@@ -2,10 +2,14 @@ import { Controller, Post, Get, Param, Body, UploadedFiles, UseInterceptors, Req
 import { TemplateService } from './template.service';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
+import { UploadService } from '../upload/upload.service';
 
 @Controller('template')
 export class TemplateController {
-  constructor(private readonly templateService: TemplateService) {}
+  constructor(
+    private readonly templateService: TemplateService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Post('create')
   @UseInterceptors(FilesInterceptor('images', 3))
@@ -18,6 +22,13 @@ export class TemplateController {
     const siteId = body.siteId;
     if (!userId) throw new BadRequestException('Utilisateur non authentifié');
     if (!siteId) throw new BadRequestException('Site manquant');
+
+    // Validate images if provided
+    if (files && files.length > 0) {
+      const imageValidation = this.uploadService.validateImageFiles(files);
+      if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
+    }
+
     return this.templateService.createTemplate(body, files, userId, siteId);
   }
 
