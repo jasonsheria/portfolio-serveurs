@@ -27,16 +27,10 @@ export class VisitService {
       const id = new Types.ObjectId('00000001b159b3b99d807000');
       return this.visitModel.find({ template: id }).sort({ date: -1 }).exec();
     }
-    // Retourne les visites associées à ce template
-    const tpl = await this.templateModel.findOne({ site: siteId });
-    // recuperer l'id de tpl
-    if (!tpl) {
-      console.warn('[VISIT] Aucune template trouvée pour l\'id', siteId);
-      return [];
-    }
+   
     // console.log('[VISIT] Recherche des visites pour le template', tpl._id);
     // Retourne les visites associées à ce template
-    const data = this.visitModel.find({ template: tpl._id })
+    const data = this.visitModel.find({ template: temp })
       .sort({ date: -1 });
       return data;
 

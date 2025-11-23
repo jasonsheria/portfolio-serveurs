@@ -48,7 +48,7 @@ export class PaymentService {
     async processPayment(data: CreatePaymentDto): Promise<any> {
         Logger.log('Données de paiement reçues: ' + JSON.stringify(data, null, 2), 'PaymentService');
 
-        const { amount, paymentMethod, accountId, accountType, plan } = data;
+        const { amount, paymentMethod, accountId, accountType, plan, siteId } = data;
         Logger.log('Début processPayment', 'PaymentService');
         Logger.log('Payload reçu : ' + JSON.stringify(data), 'PaymentService');
 
@@ -86,7 +86,7 @@ export class PaymentService {
             if (['visa', 'mastercard'].includes(paymentMethod)) {
                 paymentMethodDetails = {
                     card: {
-                        holder_name: data.cardHolderName,
+                        holder_name: data.cardHolderName ,
                         number: data.cardNumber,
                         expiry: data.expiryDate.replace('/', ''),
                         cvv: data.cvv
@@ -113,7 +113,7 @@ export class PaymentService {
                     // Include accountId and plan in the simulated payment URL so the frontend simulation
                     // can forward necessary metadata to the webhook handler.
                     payment_url: `/payment-simulation/${simulatedPaymentId}?accountId=${encodeURIComponent(accountId)}&plan=${encodeURIComponent(plan)}`,
-                    status: 'pending',
+                    status: 'success',
                     amount: amount,
                     currency: 'USD'
                 };
@@ -128,12 +128,13 @@ export class PaymentService {
                 amount,
                 currency: 'USD',
                 paymentMethod,
-                status: 'pending',
+                status: 'success',
                 freshpayPaymentId: simulatedPaymentId,
                 metadata: {
-                    accountId,
+                    accountId  : new Types.ObjectId(accountId),
                     accountType,
                     plan,
+                    site :siteId ? new Types.ObjectId(siteId) : null
                 },
                 paymentDetails: ['visa', 'mastercard'].includes(paymentMethod)
                     ? {
@@ -279,20 +280,24 @@ export class PaymentService {
         return payments;
     }
     async getPaymentBySite(siteId: string): Promise<Payment | null> {
+        console.log("le site id recu vaut :", siteId)
         const site = await this.siteModel.findById(siteId);
         if (!site) {
             console.warn(`Site avec _id=${siteId} non trouvé`, 'PaymentService');
+            console.log(`Site avec _id=${siteId} non trouvé`, 'PaymentService');
             throw new NotFoundException(`Site with id ${siteId} not found`);
         }
         // On recherche le paiement lié à ce site (cast siteId en ObjectId)
-        const payment = await this.paymentModel.findOne({ site: new Types.ObjectId(siteId) })
+        const payment = await this.paymentModel.findOne({ 'metadata.site': new Types.ObjectId(siteId) })
             .populate('client')
             .populate('site')
             .exec();
         if (!payment) {
             console.warn(`Aucun paiement trouvé pour le site avec _id=${siteId}`, 'PaymentService');
+            console.log(`Aucun paiement trouvé pour le site avec _id=${siteId}`, 'PaymentService');
             return null;
         }
+        console.log("le payment recu vaut :", payment)
         return payment;
          }
 }

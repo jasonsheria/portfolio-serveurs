@@ -227,8 +227,9 @@ export class OwnerController {
   }
 
   @Get()
-  findAll() {
-    return this.ownerService.findAll();
+  @UseGuards(JwtAuthGuard)
+  findAll(@Param('site') site: string) {
+    return this.ownerService.findAll(site);
   }
 
   @Get(':id')

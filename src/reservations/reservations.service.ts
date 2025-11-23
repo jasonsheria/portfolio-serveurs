@@ -36,7 +36,7 @@ export class ReservationsService {
             const ownerId = reservation.owner?.toString?.() ?? reservation.owner;
             const senderId = reservation.user?.toString?.() ?? reservation.user;
             const titleOwner = 'Réservation confirmée';
-            const messageOwner = `'votre annonce'}" a une réservation confirmée pour le ${reservation.date || ''} ${reservation.time || ''}`;
+            const messageOwner = `votre annonce a une réservation confirmée pour le ${reservation.date || ''} ${reservation.time || ''} avec le client.`;
             await this.notificationsService.create({
                 user: ownerId,
                 senderId,

@@ -46,4 +46,8 @@ export class CreatePaymentDto {
     @IsOptional()
     @IsString()
     mobileNumber?: string;
+
+    @IsOptional()
+    @IsString()
+    siteId?: string;
 }

@@ -194,7 +194,7 @@ export class OwnerService {
     }
   }
 
-  async findAll() {
+  async findAll(site : any) {
     return await this.ownerModel.find().populate('user');
   }
 

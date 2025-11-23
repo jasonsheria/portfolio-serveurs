@@ -223,7 +223,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             (async () => {
                 try {
                     const unread = await this.notificationsService.findUnread(userId);
-                    console.log("unreed messages:", unread);
+                    // console.log("unreed messages:", unread);
                     if (Array.isArray(unread) && unread.length > 0) {
                         // Normalize the payload to match frontend expectations
                         const payload = unread.map((item: any) => ({
