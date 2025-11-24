@@ -67,15 +67,15 @@ export class MobilierController {
       const userId = req.user.userId;
       const userType = req.user.type || 'User';
 
-      // Create standardized responses
-      const imageResponses = files.images 
-        ? this.uploadService.createBulkUploadResponse(files.images, 'mobilier/images')
+      // Create standardized responses (await because service may upload to cloud)
+      const imageResponses = files.images
+        ? await this.uploadService.createBulkUploadResponse(files.images, 'mobilier/images')
         : [];
-      const videoResponses = files.videos 
-        ? this.uploadService.createBulkUploadResponse(files.videos, 'mobilier/videos')
+      const videoResponses = files.videos
+        ? await this.uploadService.createBulkUploadResponse(files.videos, 'mobilier/videos')
         : [];
-      const documentResponses = files.documents 
-        ? this.uploadService.createBulkUploadResponse(files.documents, 'mobilier/documents')
+      const documentResponses = files.documents
+        ? await this.uploadService.createBulkUploadResponse(files.documents, 'mobilier/documents')
         : [];
 
       const createPayload: any = {
@@ -193,15 +193,15 @@ export class MobilierController {
         throw new BadRequestException('Non autorisé à modifier ce bien');
       }
 
-      // Create standardized responses for new files
-      const newImageResponses = files.newImages 
-        ? this.uploadService.createBulkUploadResponse(files.newImages, 'mobilier/images')
+      // Create standardized responses for new files (await cloud uploads)
+      const newImageResponses = files.newImages
+        ? await this.uploadService.createBulkUploadResponse(files.newImages, 'mobilier/images')
         : [];
-      const newVideoResponses = files.newVideos 
-        ? this.uploadService.createBulkUploadResponse(files.newVideos, 'mobilier/videos')
+      const newVideoResponses = files.newVideos
+        ? await this.uploadService.createBulkUploadResponse(files.newVideos, 'mobilier/videos')
         : [];
-      const newDocumentResponses = files.newDocuments 
-        ? this.uploadService.createBulkUploadResponse(files.newDocuments, 'mobilier/documents')
+      const newDocumentResponses = files.newDocuments
+        ? await this.uploadService.createBulkUploadResponse(files.newDocuments, 'mobilier/documents')
         : [];
 
       // Mettre à jour avec les anciennes et nouvelles images

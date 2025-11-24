@@ -71,12 +71,12 @@ export class OwnerController {
       const userId = new Types.ObjectId(req.user.id);
 
       // Créer les réponses standardisées
-      const idFileResponse = this.uploadService.createUploadResponse(files.idFile[0], 'owners/documents');
-      const propertyTitleResponses = files.propertyTitle 
-        ? this.uploadService.createBulkUploadResponse(files.propertyTitle, 'owners/documents')
+      const idFileResponse = await this.uploadService.createUploadResponse(files.idFile[0], 'owners/documents');
+      const propertyTitleResponses = files.propertyTitle
+        ? await this.uploadService.createBulkUploadResponse(files.propertyTitle, 'owners/documents')
         : [];
       const profileResponses = files.profile
-        ? this.uploadService.createBulkUploadResponse(files.profile, 'owners/profiles')
+        ? await this.uploadService.createBulkUploadResponse(files.profile, 'owners/profiles')
         : [];
 
       // Validate required meta fields and provide sensible defaults

@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { diskStorage } from 'multer';
 import { join, extname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { CloudinaryService } from './cloudinary.service';
 
 @Injectable()
 export class UploadService {
+  private readonly logger = new Logger(UploadService.name);
+  constructor(private readonly cloudinaryService?: CloudinaryService) {}
+
   /**
    * Retourne la configuration Multer pour diskStorage
    * @param folder Sous-dossier (ex: 'general', 'profiles', 'mobilier')
@@ -73,13 +77,59 @@ export class UploadService {
    * @returns URL publique
    */
   getPublicUrl(filename: string, folder: string = 'general'): string {
+    // If using Cloudinary, construct public URL from cloud folder config
+    if ((process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary') {
+      const cloudFolder = (process.env.CLOUDINARY_UPLOAD_FOLDER || 'app_uploads') + '/' + folder;
+      // Cloudinary public id typically is the filename without extension; but we store secure_url in response.
+      // For consistency, return the Cloudinary URL base if provided via env, otherwise fallback to /uploads path.
+      return process.env.CLOUDINARY_BASE_URL
+        ? `${process.env.CLOUDINARY_BASE_URL}/${cloudFolder}/${filename}`
+        : `/uploads/${folder}/${filename}`;
+    }
     return `/uploads/${folder}/${filename}`;
   }
 
   /**
    * Crée une réponse standardisée pour un upload
    */
-  createUploadResponse(file: Express.Multer.File, folder: string = 'general') {
+  async createUploadResponse(file: Express.Multer.File, folder: string = 'general') {
+    // If Cloudinary provider is configured, upload the local file to Cloudinary and return cloud info.
+    if ((process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary' && this.cloudinaryService) {
+      try {
+        const localPath = (file as any).path || file.path || null;
+        if (!localPath) {
+          this.logger.warn('File has no local path, cannot upload to Cloudinary');
+          return {
+            url: this.getPublicUrl(file.filename, folder),
+            filename: file.filename,
+            size: file.size,
+            mimetype: file.mimetype,
+            uploadedAt: new Date().toISOString(),
+          };
+        }
+        const result = await this.cloudinaryService.uploadAndRemove(localPath, folder);
+        return {
+          url: result.secure_url,
+          filename: result.public_id ? `${result.public_id}.${result.format}` : result.public_id || file.filename,
+          size: result.bytes || file.size,
+          mimetype: result.format || file.mimetype,
+          uploadedAt: result.created_at || new Date().toISOString(),
+          provider: 'cloudinary',
+          raw: result,
+        };
+      } catch (e) {
+        this.logger.error('Cloudinary upload failed', e as any);
+        // fallback to local url
+        return {
+          url: this.getPublicUrl(file.filename, folder),
+          filename: file.filename,
+          size: file.size,
+          mimetype: file.mimetype,
+          uploadedAt: new Date().toISOString(),
+        };
+      }
+    }
+
     return {
       url: this.getPublicUrl(file.filename, folder),
       filename: file.filename,
@@ -92,8 +142,14 @@ export class UploadService {
   /**
    * Crée une réponse standardisée pour plusieurs fichiers
    */
-  createBulkUploadResponse(files: Express.Multer.File[], folder: string = 'general') {
-    return files.map(file => this.createUploadResponse(file, folder));
+  async createBulkUploadResponse(files: Express.Multer.File[], folder: string = 'general') {
+    const results = [] as any[];
+    for (const file of files) {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await this.createUploadResponse(file, folder);
+      results.push(r);
+    }
+    return results;
   }
 
   /**

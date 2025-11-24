@@ -31,8 +31,8 @@ export class SiteController {
     
     let finalImagePath = undefined;
     if (file) {
-      // Create standardized response
-      const fileResponse = this.uploadService.createUploadResponse(file, 'services');
+      // Create standardized response (supports cloud upload)
+      const fileResponse = await this.uploadService.createUploadResponse(file, 'services');
       finalImagePath = fileResponse.url;
       body.service_image = finalImagePath;
     }

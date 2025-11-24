@@ -42,8 +42,8 @@ export class PortfolioController {
     const validation = this.uploadService.validateImageFile(file);
     if (!validation.valid) throw new BadRequestException(validation.error);
 
-    // Create standardized response
-    const fileResponse = this.uploadService.createUploadResponse(file, 'portfolio');
+    // Create standardized response (support cloud provider)
+    const fileResponse = await this.uploadService.createUploadResponse(file, 'portfolio');
     return { url: fileResponse.url };
   }
 }

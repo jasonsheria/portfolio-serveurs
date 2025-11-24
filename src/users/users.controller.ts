@@ -40,7 +40,7 @@ export class UsersController {
 
     // Ajout du fichier uploadé si présent
     if (profileFile) {
-      const fileResponse = this.uploadService.createUploadResponse(profileFile, 'profiles');
+      const fileResponse = await this.uploadService.createUploadResponse(profileFile, 'profiles');
       updateData.profileFile = fileResponse.url;
     }
 

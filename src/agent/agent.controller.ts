@@ -24,8 +24,8 @@ export class AgentController {
       throw new BadRequestException(validation.error);
     }
 
-    // Retourner réponse standardisée
-    return this.uploadService.createUploadResponse(file, 'agents');
+    // Retourner réponse standardisée (upload cloud si configuré)
+    return await this.uploadService.createUploadResponse(file, 'agents');
   }
   
   

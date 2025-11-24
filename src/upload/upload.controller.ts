@@ -20,8 +20,8 @@ export class UploadController {
       throw new BadRequestException(validation.error);
     }
 
-    // Retourner une réponse standardisée
-    return this.uploadService.createUploadResponse(file, 'general');
+    // Retourner une réponse standardisée (peut uploader vers Cloudinary si configuré)
+    return await this.uploadService.createUploadResponse(file, 'general');
   }
 
   @Post('document')
@@ -36,6 +36,6 @@ export class UploadController {
       throw new BadRequestException(validation.error);
     }
 
-    return this.uploadService.createUploadResponse(file, 'documents');
+    return await this.uploadService.createUploadResponse(file, 'documents');
   }
 }
