@@ -138,7 +138,7 @@ export class OwnerService {
         // Informations de l'utilisateur
         user: {
           username: user.username,
-          profileUrl: user.profileUrl || '/logo192.png',
+          profileUrl: user.profileUrl || '/img/logo.svg',
           secondName: user.secondName,
           telephone: user.telephone,
           dateOfBirth: user.dateOfBirth,
