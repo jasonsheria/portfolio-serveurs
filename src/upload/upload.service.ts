@@ -58,10 +58,12 @@ export class UploadService {
    * Local: uploads/[folder]
    */
   getUploadPath(folder: string = 'general'): string {
-    if (process.env.NODE_ENV === 'production') {
-      return join('/upload', folder);
-    }
-    return join(process.cwd(), 'uploads', folder);
+    // Allow configuring the uploads base directory via env var (UPLOADS_DIR).
+    // Useful on Render where you attach a persistent disk (e.g. mount at /data/uploads).
+    const base = process.env.UPLOADS_DIR
+      ? process.env.UPLOADS_DIR
+      : (process.env.NODE_ENV === 'production' ? '/upload' : join(process.cwd(), 'uploads'));
+    return join(base, folder);
   }
 
   /**

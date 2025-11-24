@@ -1,5 +1,7 @@
 import { AgentModule } from './agent/agent.module';
 import { MobilierModule } from './mobilier/mobilier.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -30,6 +32,7 @@ import { ProjetModule } from './projet/projet.module'; // Importer ProjetModule
 import { NotificationsModule } from './notifications/notifications.module';
 import { EvenementModule } from './evenement/evenement.module';
 import { UploadController } from './upload/upload.controller';
+import { UploadModule } from './upload/upload.module';
 import { VisitModule } from './visit/visit.module'; // Ajout du module de tracking visite
 import { ServiceModule } from './service/service.module'; // Importer le module de service
 // import { StripeModule } from './stripe/stripe.module';
@@ -55,6 +58,11 @@ import { ReservationsModule } from './reservations/reservations.module';
       }),
       inject: [ConfigService], // Injecter ConfigService dans la useFactory
     }),
+    // Serve uploaded files from persistent disk or local uploads folder
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', process.env.UPLOADS_DIR || 'uploads'),
+      serveRoot: '/uploads',
+    }),
     AuthModule,
     MessagesModule,
     UsersModule,
@@ -79,8 +87,9 @@ import { ReservationsModule } from './reservations/reservations.module';
     AgentModule,
     MobilierModule,
     OwnerModule,
+    UploadModule,
   ],
-  controllers: [AppController, UploadController],
+  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
