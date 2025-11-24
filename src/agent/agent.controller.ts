@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Param, Put, Delete, UploadedFile, BadRequestException, UseInterceptors, Query, UseGuards, Req, InternalServerErrorException, UsePipes, ValidationPipe } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { multerOptions } from '../upload/multer.config';
 import { AgentService } from './agent.service';
 import { UploadService } from '../upload/upload.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
@@ -13,7 +14,7 @@ export class AgentController {
   ) {}
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', multerOptions('agents')))
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Aucun fichier reçu');
 

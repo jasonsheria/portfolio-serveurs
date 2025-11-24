@@ -2,6 +2,7 @@ import { Controller, Post, Body, UseGuards, Request, Get, UseInterceptors, Uploa
 import { SiteService } from './site.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { multerOptions } from '../upload/multer.config';
 import { UploadService } from '../upload/upload.service';
 
 @Controller('site')
@@ -13,7 +14,7 @@ export class SiteController {
 
   @UseGuards(JwtAuthGuard)
   @Post('save')
-  @UseInterceptors(FileInterceptor('service_image'))
+  @UseInterceptors(FileInterceptor('service_image', multerOptions('services')))
   async saveSite(
     @Request() req,
     @Body() body: any,

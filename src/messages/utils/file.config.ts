@@ -4,6 +4,10 @@ import { extname, join } from 'path';
 import * as fs from 'fs';
 import { Request } from 'express';
 
+// Base uploads directory: prefer UPLOADS_DIR env var (e.g. /data/uploads),
+// fallback to ./uploads inside project.
+const UPLOADS_BASE = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
+
 // Allowed file types
 const allowedFileTypes = {
   image: ['.jpg', '.jpeg', '.png', '.gif'],
@@ -25,8 +29,8 @@ export const multerConfig = {
       
       const fileType = getFileType(file.originalname);
       
-      // Create base uploads/messages folder if it doesn't exist
-      const baseUploadPath = join('/uploads', 'messages'); 
+      // Create base uploads/messages folder inside UPLOADS_BASE
+      const baseUploadPath = join(UPLOADS_BASE, 'messages');
       if (!fs.existsSync(baseUploadPath)) {
         fs.mkdirSync(baseUploadPath, { recursive: true });
       }

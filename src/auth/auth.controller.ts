@@ -12,6 +12,7 @@ import { ChatGateway } from '../chat/chat.gateway';
 import { createTransport } from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
+import { multerOptions } from '../upload/multer.config';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import type { Express } from 'express';
 import { UploadService } from '../upload/upload.service';
@@ -29,7 +30,7 @@ export class AuthController {
   ) { }
 
   @Post('register')
-  @UseInterceptors(FileInterceptor('profileImage'))
+  @UseInterceptors(FileInterceptor('profileImage', multerOptions('profiles')))
   @HttpCode(HttpStatus.CREATED)
   async register(
     @Body() registerDto: RegisterDto,
@@ -167,7 +168,7 @@ export class AuthController {
     { name: 'logoFile', maxCount: 1 },
     { name: 'postalCardFile', maxCount: 1 },
     { name: 'companyLogoFile', maxCount: 1 },
-  ]))
+  ], multerOptions()))
   async updateProfile(
     @Request() req,
     @Body() updateUserDto: UpdateUserDto,

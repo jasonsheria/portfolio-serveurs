@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { PortfolioService } from './portfolio.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { multerOptions } from '../upload/multer.config';
 import { UploadService } from '../upload/upload.service';
 
 @Controller('portfolio')
@@ -33,7 +34,7 @@ export class PortfolioController {
   }
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', multerOptions('portfolio')))
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Aucun fichier reçu');
     

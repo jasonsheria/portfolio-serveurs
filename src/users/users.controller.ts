@@ -2,6 +2,7 @@ import { Controller, Put, Body, Param, UseGuards, UploadedFile, UseInterceptors,
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { multerOptions } from '../upload/multer.config';
 import { Express } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -19,7 +20,7 @@ export class UsersController {
   // Route de mise à jour du profil utilisateur (hors email/password)
   @UseGuards(JwtAuthGuard)
   @Put('profile/:id')
-  @UseInterceptors(FileInterceptor('profileFile'))
+  @UseInterceptors(FileInterceptor('profileFile', multerOptions('profiles')))
   async updateProfile(
     @Param('id') id: string,
     @Body() updateData: any,
