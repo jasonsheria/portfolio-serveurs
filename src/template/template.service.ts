@@ -12,6 +12,7 @@ export class TemplateService {
   constructor(
     @InjectModel(Template.name) private templateModel: Model<Template>,
     private usersService: UsersService,
+    private uploadService: import('../upload/upload.service').UploadService,
   ) {}
 
   async createTemplate(data: any, files: Express.Multer.File[], userId: string, siteId: string): Promise<Template> {
@@ -21,19 +22,54 @@ export class TemplateService {
     if (files.length > 3) {
       throw new BadRequestException('Maximum 3 images autorisées');
     }
-    // Sauvegarder les images
+    // Upload images using UploadService so provider (Cloudinary) is used when configured
     const imageUrls: string[] = [];
-    const uploadDir = path.join('/uploads', 'templates', siteId);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
     for (const file of files) {
-      const ext = path.extname(file.originalname);
-      const filename = `template_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
-      const filePath = path.join(uploadDir, filename);
-      fs.writeFileSync(filePath, file.buffer);
-      imageUrls.push(`/uploads/templates/${siteId}/${filename}`);
+      try {
+        const fileObj = file as Express.Multer.File & { path?: string };
+        // Ensure there's a local path for UploadService to pick up (write buffer to disk if needed)
+        if (!fileObj.path && (fileObj as any).buffer) {
+          const uploadBase = this.uploadService.getUploadPath(`templates/${siteId}`);
+          if (!fs.existsSync(uploadBase)) fs.mkdirSync(uploadBase, { recursive: true });
+          const ext = path.extname(fileObj.originalname) || '.png';
+          const filename = `template_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
+          const filePath = path.join(uploadBase, filename);
+          fs.writeFileSync(filePath, (fileObj as any).buffer);
+          (fileObj as any).path = filePath;
+          (fileObj as any).filename = filename;
+        }
+        const resp = await this.uploadService.createUploadResponse(fileObj, `templates/${siteId}`);
+        if (resp && resp.url) imageUrls.push(resp.url);
+        else {
+          // fallback to local path pattern if uploadService didn't return url
+          const filename = (fileObj as any).filename || fileObj.originalname;
+          imageUrls.push(`/uploads/templates/${siteId}/${filename}`);
+        }
+      } catch (err) {
+        // on error, skip this file but log
+        console.error('Failed to process template image', err);
+      }
     }
+    const created = new this.templateModel({
+      url: data.url,
+      type: data.type,
+      images: imageUrls,
+      site: siteId,
+      user: userId,
+    });
+    return created.save();
+  }
+
+  /**
+   * Create a template using already-uploaded media responses (e.g. Cloudinary URLs).
+   * This avoids reading file.buffer in the service and uses the UploadService results.
+   */
+  async createTemplateWithMedia(data: any, fileResponses: any[], userId: string, siteId: string): Promise<Template> {
+    if (!data.url || !data.type) {
+      throw new BadRequestException('Champs obligatoires manquants');
+    }
+    // Build imageUrls from fileResponses (expecting { url })
+    const imageUrls: string[] = (fileResponses || []).map(r => r.url || r.secure_url).filter(Boolean);
     const created = new this.templateModel({
       url: data.url,
       type: data.type,

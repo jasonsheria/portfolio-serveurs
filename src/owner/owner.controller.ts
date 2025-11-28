@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFiles, UseGuards, Req, BadRequestException, InternalServerErrorException, ConflictException, NotFoundException } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { multerFieldsOptions } from '../upload/multer.config';
 import { OwnerService } from './owner.service';
 import { CreateOwnerDto, OwnerMetaDto } from './dto/create-owner.dto';
 import { UpdateOwnerDto } from './dto/update-owner.dto';
@@ -31,7 +32,11 @@ export class OwnerController {
     { name: 'idFile', maxCount: 1 },
     { name: 'propertyTitle', maxCount: 10 },
     { name: 'profile', maxCount: 3 }
-  ]))
+  ], multerFieldsOptions([
+    { name: 'idFile', folder: 'owners/documents', maxCount: 1 },
+    { name: 'propertyTitle', folder: 'owners/documents', maxCount: 10 },
+    { name: 'profile', folder: 'owners/profiles', maxCount: 3 },
+  ])))
   async create(
     @UploadedFiles() files: UploadedOwnerFiles,
     @Body('meta') metaString: string,
@@ -78,6 +83,8 @@ export class OwnerController {
       const profileResponses = files.profile
         ? await this.uploadService.createBulkUploadResponse(files.profile, 'owners/profiles')
         : [];
+
+      console.log('[OwnerController] create: user=', req.user?.id, ' idFile=', !!idFileResponse, ' propertyTitle_count=', propertyTitleResponses.length, ' profile_count=', profileResponses.length);
 
       // Validate required meta fields and provide sensible defaults
       if (!meta || !meta.form) {

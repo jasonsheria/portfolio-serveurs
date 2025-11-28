@@ -33,6 +33,7 @@ export class UsersService {
     constructor(
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Payment.name) private paymentModel: Model<Payment>,
+        private uploadService: import('../upload/upload.service').UploadService,
     ) {
         // L'ancienne simulation en mémoire (private readonly usersModel: Model<User>, this.usersModel = userModel,
         // ainsi que les références à this.users et this.nextId) a été retirée.
@@ -101,7 +102,7 @@ export class UsersService {
         // 2. Gestion de la photo de profil si présente (upload dans le dossier backend)
         let profileUrl = '';
         if (createUserDto.profileFile) {
-            const file = createUserDto.profileFile;
+            const file = createUserDto.profileFile as Express.Multer.File & { path?: string };
             // Vérification du type MIME (image uniquement)
             const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
             if (!allowedTypes.includes(file.mimetype)) {
@@ -112,17 +113,24 @@ export class UsersService {
             if (file.size > maxSize) {
                 throw new NotFoundException('La taille de la photo de profil ne doit pas dépasser 5 Mo.');
             }
-            // Générer un nom de fichier unique
-            const ext = path.extname(file.originalname);
-            const fileName = `profile_${Date.now()}_${Math.floor(Math.random()*10000)}${ext}`;
-            const profileDir = path.join('/uploads', 'profiles');
-            if (!fs.existsSync(profileDir)) {
-                fs.mkdirSync(profileDir, { recursive: true });
+            try {
+                // If multer already saved file to disk, use it directly; otherwise write buffer to disk so UploadService can process it
+                if (!file.path && file.buffer) {
+                    const uploadBase = this.uploadService.getUploadPath('profiles');
+                    if (!fs.existsSync(uploadBase)) fs.mkdirSync(uploadBase, { recursive: true });
+                    const ext = path.extname(file.originalname) || '.png';
+                    const fileName = `profile_${Date.now()}_${Math.floor(Math.random()*10000)}${ext}`;
+                    const filePath = path.join(uploadBase, fileName);
+                    fs.writeFileSync(filePath, file.buffer);
+                    (file as any).path = filePath;
+                    (file as any).filename = fileName;
+                }
+                const resp = await this.uploadService.createUploadResponse(file, 'profiles');
+                profileUrl = resp.url || createUserDto.profileUrl || '';
+            } catch (err) {
+                this.logger.error('Failed to upload profile file via UploadService', err as any);
+                profileUrl = createUserDto.profileUrl || '';
             }
-            const filePath = path.join(profileDir, fileName);
-            fs.writeFileSync(filePath, file.buffer);
-            // Stocker le chemin relatif pour le frontend (à servir en statique)
-            profileUrl = `/uploads/profiles/${fileName}`;
         } else {
             profileUrl = createUserDto.profileUrl || '';
         }
@@ -256,14 +264,6 @@ export class UsersService {
                     return;
                 }
 
-                const ext = file.originalname.split('.').pop();
-                const fileName = `${fileField}_${Date.now()}.${ext}`;
-                // choose subfolder based on fileField
-                const uploadType = (fileField === 'cvFile') ? 'cv' : (fileField === 'logoFile' || fileField === 'companyLogoFile') ? 'logos' : (fileField === 'postalCardFile') ? 'postalCards' : 'profiles';
-                const fileDir = path.join('/uploads', uploadType);
-                if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
-                const filePath = path.join(fileDir, fileName);
-
                 try {
                     let finalBuffer = file.buffer;
                     if (fileField === 'profileImage1' || fileField === 'profileImage2' || fileField === 'profileImage3') {
@@ -276,16 +276,28 @@ export class UsersService {
                             }
                         }
                     }
+
+                    // Write temporary file and use UploadService to handle provider upload
+                    const uploadType = (fileField === 'cvFile') ? 'cv' : (fileField === 'logoFile' || fileField === 'companyLogoFile') ? 'logos' : (fileField === 'postalCardFile') ? 'postalCards' : 'profiles';
+                    const uploadBase = this.uploadService.getUploadPath(uploadType);
+                    if (!fs.existsSync(uploadBase)) fs.mkdirSync(uploadBase, { recursive: true });
+                    const ext = (file.originalname || '').split('.').pop() || 'bin';
+                    const fileName = `${fileField}_${Date.now()}.${ext}`;
+                    const filePath = path.join(uploadBase, fileName);
                     await fs.promises.writeFile(filePath, finalBuffer);
-                    const storedPath = `/uploads/${uploadType}/${fileName}`;
+
+                    // Create a temporary file-like object for UploadService
+                    const tmpFile = { ...(file as any), path: filePath, filename: fileName } as Express.Multer.File & { path: string };
+                    const resp = await this.uploadService.createUploadResponse(tmpFile, uploadType);
+                    const storedPath = resp.url || `/uploads/${uploadType}/${fileName}`;
                     if (entityFieldOverride) {
                         (userToUpdate as any)[entityFieldOverride] = storedPath;
                     } else {
                         (updateUserDto as any)[fileField] = storedPath;
                     }
-                    this.logger.log(`File ${fileName} saved to ${filePath} for user ${id}`);
+                    this.logger.log(`File ${fileName} uploaded via UploadService for user ${id}, storedPath=${storedPath}`);
                 } catch (error) {
-                    this.logger.error(`Failed to save file ${fileName} for user ${id}: ${error.message}`, error.stack);
+                    this.logger.error(`Failed to process in-memory file for ${fileField} for user ${id}: ${error.message}`, error.stack);
                 }
             }
         };

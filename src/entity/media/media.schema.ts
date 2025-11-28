@@ -19,6 +19,18 @@ export class Media extends Document {
   @Prop()
   filename: string;
 
+  @Prop()
+  provider?: string;
+
+  @Prop()
+  public_id?: string;
+
+  @Prop()
+  mimetype?: string;
+
+  @Prop()
+  size?: number;
+
   @Prop({ default: Date.now })
   createdAt: Date;
 }

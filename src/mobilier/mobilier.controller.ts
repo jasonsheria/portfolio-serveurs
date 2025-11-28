@@ -18,11 +18,14 @@ import {
 import { MobilierService } from './mobilier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { multerFieldsOptions } from '../upload/multer.config';
 import { Types } from 'mongoose';
 import { UploadService } from '../upload/upload.service';
+import { Logger } from '@nestjs/common';
 
 @Controller('mobilier')
 export class MobilierController {
+  private readonly logger = new Logger(MobilierController.name);
   constructor(
     private readonly mobilierService: MobilierService,
     private readonly uploadService: UploadService
@@ -34,7 +37,11 @@ export class MobilierController {
     { name: 'images', maxCount: 10 },
     { name: 'videos', maxCount: 5 },
     { name: 'documents', maxCount: 5 }
-  ]))
+  ], multerFieldsOptions([
+    { name: 'images', folder: 'mobilier/images' },
+    { name: 'videos', folder: 'mobilier/videos' },
+    { name: 'documents', folder: 'mobilier/documents' }
+  ])))
   async create(
     @Req() req,
     @Body('data') dataString: string,
@@ -63,7 +70,22 @@ export class MobilierController {
         if (!docValidation.valid) throw new BadRequestException(docValidation.error);
       }
 
-      const data = JSON.parse(dataString);
+      let data: any;
+      if (typeof dataString === 'string') {
+        try {
+          data = JSON.parse(dataString);
+        } catch (e) {
+          // Be tolerant of common encodings from form builders (e.g. escaped quotes).
+          try {
+            const unescaped = (dataString || '').replace(/\\+/g, '');
+            data = JSON.parse(unescaped);
+          } catch (e2) {
+            throw e; // let outer catch handle invalid format
+          }
+        }
+      } else {
+        data = dataString;
+      }
       const userId = req.user.userId;
       const userType = req.user.type || 'User';
 
@@ -87,6 +109,12 @@ export class MobilierController {
         documents: documentResponses.map(r => r.url)
       };
 
+      // Log payload summary (avoid logging everything for privacy)
+      try {
+        this.logger.log(`Creating Mobilier: titre='${data?.titre || ''}' proprietaire=${userId} images_count=${(createPayload.images || []).length} videos_count=${(createPayload.videos || []).length} documents_count=${(createPayload.documents || []).length}`);
+        this.logger.debug(`createPayload images sample: ${JSON.stringify(createPayload.images.slice(0,5))}`);
+      } catch (e) {}
+
       if (data && data.agentId) {
         try {
           createPayload.agent = new Types.ObjectId(data.agentId);
@@ -95,7 +123,15 @@ export class MobilierController {
         }
       }
 
-      return this.mobilierService.create(createPayload);
+      const created = await this.mobilierService.create(createPayload);
+
+      // Log result of DB save and verify urls were stored
+      try {
+        this.logger.log(`Mobilier created id=${created?._id || created.id || 'unknown'}`);
+        this.logger.debug(`Stored images: ${JSON.stringify(created?.images || created?.images || [])}`);
+      } catch (e) {}
+
+      return created;
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new BadRequestException('Format de données invalide');
@@ -154,7 +190,11 @@ export class MobilierController {
     { name: 'newImages', maxCount: 10 },
     { name: 'newVideos', maxCount: 5 },
     { name: 'newDocuments', maxCount: 5 }
-  ]))
+  ], multerFieldsOptions([
+    { name: 'newImages', folder: 'mobilier/images', maxCount: 10 },
+    { name: 'newVideos', folder: 'mobilier/videos', maxCount: 5 },
+    { name: 'newDocuments', folder: 'mobilier/documents', maxCount: 5 }
+  ])))
   async update(
     @Param('id') id: string,
     @Req() req,

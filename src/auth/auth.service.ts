@@ -42,6 +42,7 @@ export class AuthService {
     private userService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService, // Injectez ConfigService
+    private uploadService: import('../upload/upload.service').UploadService,
   ) {
     // Initialisez le client Google OAuth2
     this.googleClient = new OAuth2Client(
@@ -71,33 +72,31 @@ export class AuthService {
       await this.userService.deleteUserAndRelatedData(existingUser._id.toString());
     }
     let profileUrl = '';
-    if (profileImage && profileImage.buffer) {
-       try {
-        const ext = profileImage.originalname.split('.').pop();
-        const fileName = `profile_${Date.now()}_${uuidv4()}.${ext}`; // Utiliser UUID pour plus d'unicité
-        // Assurez-vous que ce chemin est correct par rapport à la racine de votre projet NestJS
-         const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'profiles');
-        // --- Fin du chemin de sauvegarde ---
-        // Créer le répertoire s'il n'existe pas
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
-          this.logger.log(`Répertoire de téléchargement créé: ${uploadDir}`);
+    if (profileImage) {
+      try {
+        // Use UploadService to handle storage provider (Cloudinary or local fallback)
+        // If Multer wrote the file to disk, uploadService will pick up file.path and upload to cloud
+        // If file is in-memory (buffer), create a temporary file and pass it through uploadService
+        let fileToUse = profileImage as Express.Multer.File & { path?: string };
+        if (!fileToUse.path && fileToUse.buffer) {
+          // write buffer to a temp file under uploads/profiles
+          const uploadBase = this.uploadService.getUploadPath('profiles');
+          if (!fs.existsSync(uploadBase)) fs.mkdirSync(uploadBase, { recursive: true });
+          const ext = (fileToUse.originalname || 'img').split('.').pop() || 'png';
+          const fileName = `profile-${Date.now()}-${uuidv4()}.${ext}`;
+          const targetPath = path.join(uploadBase, fileName);
+          fs.writeFileSync(targetPath, fileToUse.buffer);
+          // assign path so uploadService can pick it up
+          (fileToUse as any).path = targetPath;
+          (fileToUse as any).filename = fileName;
         }
 
-        const filePath = path.join(uploadDir, fileName);
-        fs.writeFileSync(filePath, profileImage.buffer);
-        this.logger.log(`Fichier image sauvegardé: ${filePath}`);
-
-        // --- URL publique alignée avec main.ts ---
-        // L'URL d'accès public doit correspondre au préfixe statique défini dans main.ts
-  profileUrl = `/uploads/profiles/${fileName}`;
-        this.logger.log(`URL publique de l'image: ${profileUrl}`);
-        // --- Fin de l'URL publique ---
-
+        const uploadResp = await this.uploadService.createUploadResponse(fileToUse, 'profiles');
+        profileUrl = uploadResp.url || '';
+        this.logger.log(`Profile image processed. URL=${profileUrl}`);
       } catch (error) {
-        console.error('Erreur lors de la sauvegarde du fichier image:', error);
-        // Gérer l'erreur de sauvegarde de fichier si nécessaire
-        // Vous pourriez vouloir lancer une exception ou continuer sans image de profil
+        console.error('Erreur lors du traitement de l image de profil:', error);
+        // continue without profile image
       }
     }
     try {

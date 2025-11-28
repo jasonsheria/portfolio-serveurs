@@ -12,7 +12,7 @@ import { ChatGateway } from '../chat/chat.gateway';
 import { createTransport } from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
-import { multerOptions } from '../upload/multer.config';
+import { multerOptions, multerFieldsOptions } from '../upload/multer.config';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import type { Express } from 'express';
 import { UploadService } from '../upload/upload.service';
@@ -168,7 +168,15 @@ export class AuthController {
     { name: 'logoFile', maxCount: 1 },
     { name: 'postalCardFile', maxCount: 1 },
     { name: 'companyLogoFile', maxCount: 1 },
-  ], multerOptions()))
+  ], multerFieldsOptions([ // write each field to a sensible folder
+    { name: 'profileImage1', folder: 'profiles' },
+    { name: 'profileImage2', folder: 'profiles' },
+    { name: 'profileImage3', folder: 'profiles' },
+    { name: 'cvFile', folder: 'profiles/documents' },
+    { name: 'logoFile', folder: 'profiles/logos' },
+    { name: 'postalCardFile', folder: 'profiles/documents' },
+    { name: 'companyLogoFile', folder: 'profiles/logos' },
+  ])))
   async updateProfile(
     @Request() req,
     @Body() updateUserDto: UpdateUserDto,
@@ -182,8 +190,9 @@ export class AuthController {
       companyLogoFile?: Express.Multer.File[],
     }
   ) {
-    const userId = req.user?.id || req.user?.userId || req.user?._id;
-    this.logger.debug(`Mise à jour du profil pour l'utilisateur: ${userId}`);
+  const userId = req.user?.id || req.user?.userId || req.user?._id;
+  this.logger.debug(`Mise à jour du profil pour l'utilisateur: ${userId}`);
+  console.log('[AuthController] updateProfile: received files summary=', Object.keys(files).reduce((acc, key) => ({ ...acc, [key]: (files as any)[key]?.length || 0 }), {}));
 
     try {
       // Validate all files if provided

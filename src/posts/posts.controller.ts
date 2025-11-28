@@ -16,6 +16,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { multerOptions } from '../upload/multer.config';
 import { PostsService } from './posts.service';
 import { Types } from 'mongoose';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -31,7 +32,7 @@ export class PostsController {
 
   @UseGuards(JwtAuthGuard) 
   @HttpPost('create')
-  @UseInterceptors(FilesInterceptor('media', 10))
+  @UseInterceptors(FilesInterceptor('media', 10, multerOptions('posts')))
   async createPost(
     @Req() req, 
     @Body() body, 
@@ -75,12 +76,18 @@ export class PostsController {
       throw new BadRequestException('Invalid ID format for User or Site (ObjectId cast failed).');
     }
 
-    // Create standardized responses for files
+    // Create standardized responses for files (await uploads to cloud)
     const fileResponses = files && files.length > 0
-      ? this.uploadService.createBulkUploadResponse(files, 'posts')
+      ? await this.uploadService.createBulkUploadResponse(files, 'posts')
       : [];
-    
-    const post = await this.postsService.createPostWithMedia(userId, parsedBody, files, siteId);
+
+    console.log('[PostsController] createPost: user=', userId.toString(), ' site=', siteId.toString(), ' files=', files ? files.length : 0);
+    if (fileResponses && fileResponses.length > 0) {
+      console.log('[PostsController] createPost: fileResponses sample=', fileResponses.map(r => ({ filename: r.filename, url: r.url, provider: r.provider })).slice(0, 5));
+    }
+
+    const post = await this.postsService.createPostWithMedia(userId, parsedBody, fileResponses, siteId);
+    console.log('[PostsController] createPost: created post id=', post?._id, ' media_count=', post?.media?.length || 0);
     return post;
   }
 
@@ -125,7 +132,7 @@ export class PostsController {
 
   @UseGuards(JwtAuthGuard)
   @Put('update/:id') 
-  @UseInterceptors(FilesInterceptor('media', 10))
+  @UseInterceptors(FilesInterceptor('media', 10, multerOptions('posts')))
   async updatePost(
     @Request() req,
     @Param('id') postIdRaw: string,
@@ -172,7 +179,14 @@ export class PostsController {
       throw new BadRequestException('Invalid ID format (ObjectId cast failed).');
     }
 
-    const post = await this.postsService.updatePost(postId, userId, siteId, parsedBody, files);
+  // If files were uploaded, upload them to cloud first and pass the fileResponses to the service
+  const newFileResponses = files && files.length > 0 ? await this.uploadService.createBulkUploadResponse(files, 'posts') : [];
+  console.log('[PostsController] updatePost: user=', userId.toString(), ' postId=', postId.toString(), ' site=', siteId.toString(), ' newFiles=', files ? files.length : 0);
+  if (newFileResponses && newFileResponses.length > 0) {
+    console.log('[PostsController] updatePost: newFileResponses sample=', newFileResponses.map(r => ({ filename: r.filename, url: r.url, provider: r.provider })).slice(0, 5));
+  }
+  const post = await this.postsService.updatePost(postId, userId, siteId, parsedBody, newFileResponses);
+  console.log('[PostsController] updatePost: updated post id=', post?._id, ' media_count=', post?.media?.length || 0);
     return post;
   }
 

@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Param, Body, UploadedFiles, UseInterceptors, Req, BadRequestException, Patch, Delete, Query } from '@nestjs/common';
 import { TemplateService } from './template.service';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { multerOptions } from '../upload/multer.config';
 import { Request } from 'express';
 import { UploadService } from '../upload/upload.service';
 
@@ -12,7 +13,7 @@ export class TemplateController {
   ) {}
 
   @Post('create')
-  @UseInterceptors(FilesInterceptor('images', 3))
+  @UseInterceptors(FilesInterceptor('images', 3, multerOptions('templates')))
   async create(
     @UploadedFiles() files: Express.Multer.File[],
     @Body() body: any,
@@ -29,7 +30,13 @@ export class TemplateController {
       if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
     }
 
-    return this.templateService.createTemplate(body, files, userId, siteId);
+    // Upload files to cloud and create template using returned URLs
+    const fileResponses = files && files.length > 0 ? await this.uploadService.createBulkUploadResponse(files, 'templates') : [];
+    console.log('[TemplateController] create: user=', userId, ' site=', siteId, ' uploadedFiles=', files ? files.length : 0);
+    if (fileResponses && fileResponses.length > 0) console.log('[TemplateController] create: fileResponses sample=', fileResponses.map(r => ({ filename: r.filename, url: r.url })).slice(0,5));
+    const created = await this.templateService.createTemplateWithMedia(body, fileResponses, userId, siteId);
+    console.log('[TemplateController] create: created template id=', created._id, ' images_count=', created.images?.length || 0);
+    return created;
   }
 
   @Post('site')

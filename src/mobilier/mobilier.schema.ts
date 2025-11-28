@@ -93,7 +93,7 @@ export class Mobilier extends Document {
 
   // Caractéristiques spécifiques aux commerces
   @Prop()
-  typeCommerce: string; // Boutique, Magasin, Bureau, etc.
+  typeCommerce: string; // Boutique, Magasin, Bureau, etc. 
 
   @Prop()
   surfaceVitrine: number;

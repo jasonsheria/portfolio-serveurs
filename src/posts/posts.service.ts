@@ -51,7 +51,7 @@ export class PostsService {
   async createPostWithMedia(
     userId: Types.ObjectId,
     postData: any,
-    files: Express.Multer.File[],
+    fileResponses: any[],
     siteId: Types.ObjectId,
   ) {
     // Validate userId
@@ -129,14 +129,26 @@ export class PostsService {
 
     // Création des médias et association au post
     const mediaDocsIds: Types.ObjectId[] = await Promise.all(
-      files.map(async (file): Promise<Types.ObjectId> => {
+      (fileResponses && fileResponses.length > 0 ? fileResponses : []).map(async (resp): Promise<Types.ObjectId> => {
+        // resp is the standardized response from UploadService.createUploadResponse
+        const url = resp.url || resp.secure_url || (resp.raw && resp.raw.secure_url) || '';
+        const filename = resp.filename || resp.public_id || resp.raw?.public_id || '';
+        const provider = resp.provider || 'local';
+        const public_id = resp.raw?.public_id || resp.public_id || null;
+        const mimetype = resp.mimetype || resp.format || resp.raw?.format || null;
+        const size = resp.size || resp.bytes || null;
+
         const media = await this.mediaModel.create({
           post: post._id,
           user: userId,
-          site: siteId, // Associer le site au média aussi
-          url: `/uploads/posts/${file.filename}`,
-          filename: file.filename,
-          type: file.mimetype.startsWith('image/') ? 'image' : file.mimetype.startsWith('video/') ? 'video' : 'file',
+          site: siteId,
+          url: url,
+          filename: filename,
+          type: mimetype ? (mimetype.startsWith('image/') ? 'image' : mimetype.startsWith('video/') ? 'video' : 'file') : 'file',
+          provider: provider,
+          public_id: public_id,
+          mimetype: mimetype,
+          size: size,
         });
         return media._id as Types.ObjectId;
       })
@@ -190,7 +202,7 @@ export class PostsService {
     userId: Types.ObjectId,
     siteId: Types.ObjectId,
     postData: any,
-    files: Express.Multer.File[],
+    fileResponses: any[],
   ): Promise<Post> {
     const post = await this.postModel.findOne({
       _id: postId,
@@ -283,26 +295,33 @@ export class PostsService {
       }
     }
 
-    // 3. Add new media if files are uploaded
-    if (files && files.length > 0) {
+    // 3. Add new media if new file responses were provided (from cloud uploads)
+    if (fileResponses && fileResponses.length > 0) {
       const newMediaDocsIds: Types.ObjectId[] = await Promise.all(
-        files.map(async (file): Promise<Types.ObjectId> => {
+        fileResponses.map(async (resp): Promise<Types.ObjectId> => {
+          const url = resp.url || resp.secure_url || resp.raw?.secure_url || '';
+          const filename = resp.filename || resp.public_id || resp.raw?.public_id || '';
+          const provider = resp.provider || 'local';
+          const public_id = resp.raw?.public_id || resp.public_id || null;
+          const mimetype = resp.mimetype || resp.format || resp.raw?.format || null;
+          const size = resp.size || resp.bytes || null;
+
           const media = await this.mediaModel.create({
             post: post._id,
-            user: userId, // Assuming userId is the ObjectId of the user
-            site: siteId,   // Assuming siteId is the ObjectId of the site
-            url: `/uploads/posts/${file.filename}`,
-            filename: file.filename,
-            type: file.mimetype.startsWith('image/')
-              ? 'image'
-              : file.mimetype.startsWith('video/')
-                ? 'video'
-                : 'file',
+            user: userId,
+            site: siteId,
+            url: url,
+            filename: filename,
+            type: mimetype ? (mimetype.startsWith('image/') ? 'image' : mimetype.startsWith('video/') ? 'video' : 'file') : 'file',
+            provider: provider,
+            public_id: public_id,
+            mimetype: mimetype,
+            size: size,
           });
           return media._id as Types.ObjectId;
         }),
       );
-      finalMediaObjectIds.push(...newMediaDocsIds); // Add new media to the final list
+      finalMediaObjectIds.push(...newMediaDocsIds);
     }
 
     // Deduplicate finalMediaObjectIds to prevent issues if an ID was somehow in both retained and new (highly unlikely with this logic)

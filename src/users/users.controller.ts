@@ -41,7 +41,11 @@ export class UsersController {
     // Ajout du fichier uploadé si présent
     if (profileFile) {
       const fileResponse = await this.uploadService.createUploadResponse(profileFile, 'profiles');
+      // store the url for frontend
       updateData.profileFile = fileResponse.url;
+      // also persist provider and public_id for future management (delete/transform)
+      updateData.profileFileProvider = fileResponse.provider || 'local';
+      updateData.profileFilePublicId = fileResponse.raw?.public_id || (fileResponse.filename ? fileResponse.filename.split('.').slice(0, -1).join('.') : null);
     }
 
     return this.usersService.updateUser(id, updateData);

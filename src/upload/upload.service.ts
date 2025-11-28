@@ -93,24 +93,40 @@ export class UploadService {
    * Crée une réponse standardisée pour un upload
    */
   async createUploadResponse(file: Express.Multer.File, folder: string = 'general') {
+    // Normalize filename fallback (some multer variants may not set `filename`)
+    const safeFilename = (file as any).filename || (file as any).originalname || `file-${Date.now()}`;
+
     // If Cloudinary provider is configured, upload the local file to Cloudinary and return cloud info.
     if ((process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary' && this.cloudinaryService) {
       try {
         const localPath = (file as any).path || file.path || null;
         if (!localPath) {
           this.logger.warn('File has no local path, cannot upload to Cloudinary');
+          // Fallback to a public URL based on configured base or local uploads folder
           return {
-            url: this.getPublicUrl(file.filename, folder),
-            filename: file.filename,
+            url: this.getPublicUrl(safeFilename, folder),
+            filename: safeFilename,
             size: file.size,
             mimetype: file.mimetype,
             uploadedAt: new Date().toISOString(),
           };
         }
+
         const result = await this.cloudinaryService.uploadAndRemove(localPath, folder);
+        const returnedFilename = result.public_id ? `${result.public_id}.${result.format}` : result.public_id || safeFilename;
+
+        // Detailed logging for diagnostics: record cloudinary response summary
+        try {
+          this.logger.log(`Cloudinary upload result for localPath=${localPath}: secure_url=${result.secure_url} public_id=${result.public_id} bytes=${result.bytes} format=${result.format}`);
+          // Optionally stringify raw response at debug level (avoid huge logs at info)
+          this.logger.debug(`Cloudinary raw response: ${JSON.stringify(result)}`);
+        } catch (logErr) {
+          // ignore logging errors
+        }
+
         return {
-          url: result.secure_url,
-          filename: result.public_id ? `${result.public_id}.${result.format}` : result.public_id || file.filename,
+          url: result.secure_url || this.getPublicUrl(returnedFilename, folder),
+          filename: returnedFilename,
           size: result.bytes || file.size,
           mimetype: result.format || file.mimetype,
           uploadedAt: result.created_at || new Date().toISOString(),
@@ -120,19 +136,22 @@ export class UploadService {
       } catch (e) {
         this.logger.error('Cloudinary upload failed', e as any);
         // fallback to local url
+        try {
+          this.logger.warn(`Falling back to local url for file ${safeFilename} (size=${file.size} mimetype=${file.mimetype})`);
+        } catch (logErr) {}
         return {
-          url: this.getPublicUrl(file.filename, folder),
-          filename: file.filename,
+          url: this.getPublicUrl(safeFilename, folder),
+          filename: safeFilename,
           size: file.size,
           mimetype: file.mimetype,
           uploadedAt: new Date().toISOString(),
         };
       }
     }
-
+    
     return {
-      url: this.getPublicUrl(file.filename, folder),
-      filename: file.filename,
+      url: this.getPublicUrl(safeFilename, folder),
+      filename: safeFilename,
       size: file.size,
       mimetype: file.mimetype,
       uploadedAt: new Date().toISOString(),
@@ -148,6 +167,9 @@ export class UploadService {
       // eslint-disable-next-line no-await-in-loop
       const r = await this.createUploadResponse(file, folder);
       results.push(r);
+      try {
+        this.logger.log(`createBulkUploadResponse: uploaded file '${(file as any).originalname || (file as any).filename}' -> url=${r.url} provider=${r.provider || 'local'}`);
+      } catch (e) {}
     }
     return results;
   }
