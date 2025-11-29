@@ -20,6 +20,7 @@ import { ConfigService } from '@nestjs/config'; // Pour accéder aux variables d
 import * as fs from 'fs'; // Importer fs
 import * as path from 'path'; // Importer path
 import { v4 as uuidv4 } from 'uuid'; // Importer uuidv4
+import { UploadService } from '../upload/upload.service';
 
 // Interface pour la réponse utilisateur cohérente
 export interface AuthUserResponse {
@@ -41,8 +42,8 @@ export class AuthService {
   constructor(
     private userService: UsersService,
     private jwtService: JwtService,
-    private configService: ConfigService, // Injectez ConfigService
-    private uploadService: import('../upload/upload.service').UploadService,
+  private configService: ConfigService, // Injectez ConfigService
+  private uploadService: UploadService,
   ) {
     // Initialisez le client Google OAuth2
     this.googleClient = new OAuth2Client(

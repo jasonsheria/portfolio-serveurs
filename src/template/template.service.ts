@@ -5,14 +5,15 @@ import { Template } from '../entity/template/template.schema';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UsersService } from '../users/users.service';
+import { UploadService } from '../upload/upload.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class TemplateService {
   constructor(
     @InjectModel(Template.name) private templateModel: Model<Template>,
-    private usersService: UsersService,
-    private uploadService: import('../upload/upload.service').UploadService,
+  private usersService: UsersService,
+  private uploadService: UploadService,
   ) {}
 
   async createTemplate(data: any, files: Express.Multer.File[], userId: string, siteId: string): Promise<Template> {

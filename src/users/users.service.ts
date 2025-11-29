@@ -21,6 +21,7 @@ import * as bcrypt from 'bcrypt';
 import type { Express } from 'express';
 import { removeBackground } from '../common/remove-bg.util';
 import * as FormData from 'form-data';
+import { UploadService } from '../upload/upload.service';
 
 @Injectable()
 export class UsersService {
@@ -33,7 +34,7 @@ export class UsersService {
     constructor(
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Payment.name) private paymentModel: Model<Payment>,
-        private uploadService: import('../upload/upload.service').UploadService,
+            private uploadService: UploadService,
     ) {
         // L'ancienne simulation en mémoire (private readonly usersModel: Model<User>, this.usersModel = userModel,
         // ainsi que les références à this.users et this.nextId) a été retirée.
