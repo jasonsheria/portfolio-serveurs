@@ -27,7 +27,11 @@ import { UploadModule } from '../upload/upload.module';
     GatewayModule,
     UploadModule,
   ],
-  providers: [AuthService, JwtStrategy, UsersService],
+  // UsersService is provided by UsersModule and should NOT be re-provided here.
+  // Re-providing it here causes Nest to try to instantiate UsersService inside
+  // AuthModule (where Mongoose models may not be available), leading to
+  // "Nest can't resolve dependencies" errors.
+  providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
   exports: [AuthService, JwtModule],
 })
