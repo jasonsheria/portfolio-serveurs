@@ -33,6 +33,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { EvenementModule } from './evenement/evenement.module';
 import { UploadController } from './upload/upload.controller';
 import { UploadModule } from './upload/upload.module';
+import { VehiculeModule } from './vehicule/vehicule.module';
 import { VisitModule } from './visit/visit.module'; // Ajout du module de tracking visite
 import { ServiceModule } from './service/service.module'; // Importer le module de service
 // import { StripeModule } from './stripe/stripe.module';
@@ -86,6 +87,7 @@ import { ReservationsModule } from './reservations/reservations.module';
     // StripeModule, 
     AgentModule,
     MobilierModule,
+    VehiculeModule,
     OwnerModule,
     UploadModule,
   ],

@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
 import { Request } from 'express';
@@ -20,7 +20,7 @@ const allowedFileTypes = {
 const maxFileSize = 25 * 1024 * 1024;
 
 export const multerConfig = {
-  storage: diskStorage({
+  storage: (process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary' ? memoryStorage() : diskStorage({
     destination: (req: Request, file, cb) => {
       // Ensure user is authenticated
       if (!req.user) {

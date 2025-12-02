@@ -1,4 +1,4 @@
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
 
@@ -6,6 +6,10 @@ import * as fs from 'fs';
 const UPLOADS_BASE = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
 
 export function multerOptions(folder = 'general') {
+  // If using cloudinary as storage provider, prefer memoryStorage to avoid writing files locally
+  if ((process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary') {
+    return { storage: memoryStorage() };
+  }
   return {
     storage: diskStorage({
       destination: (req, file, cb) => {
@@ -31,6 +35,11 @@ export default multerOptions;
  * Use this with FileFieldsInterceptor(fields, multerFieldsOptions(fieldsWithFolders))
  */
 export function multerFieldsOptions(fieldsWithFolders: { name: string; folder: string; maxCount?: number }[] = []) {
+  // If using cloudinary, prefer memoryStorage for all fields to avoid writing to disk
+  if ((process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary') {
+    return { storage: memoryStorage() };
+  }
+
   return {
     storage: diskStorage({
       destination: (req, file, cb) => {

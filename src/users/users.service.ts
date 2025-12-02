@@ -245,16 +245,21 @@ export class UsersService {
                 // If multer.diskStorage was used, file.path exists and file already saved to disk
                 if (file.path) {
                     try {
-                        const rel = path.relative('/uploads', file.path).replace(/\\/g, '/');
-                        const publicPath = `/${rel}`; // e.g. /uploads/profiles/xxx-file.png
+                        // Upload the existing local file via UploadService which will handle provider logic
+                        const uploadType = (fileField === 'cvFile') ? 'cv' : (fileField === 'logoFile' || fileField === 'companyLogoFile') ? 'logos' : (fileField === 'postalCardFile') ? 'postalCards' : 'profiles';
+                        const resp = await this.uploadService.createUploadResponse(file as any, uploadType);
+                        const storedPath = resp.url || `/${resp.filename}`;
                         if (entityFieldOverride) {
-                            (userToUpdate as any)[entityFieldOverride] = publicPath;
+                            (userToUpdate as any)[entityFieldOverride] = storedPath;
                         } else {
-                            (updateUserDto as any)[fileField] = publicPath;
+                            (updateUserDto as any)[fileField] = storedPath;
                         }
-                        this.logger.log(`Detected diskStorage file for ${fileField}, stored path ${publicPath} for user ${id}`);
+                        this.logger.log(`Detected diskStorage file for ${fileField}, uploaded via UploadService and stored path ${storedPath} for user ${id}`);
                     } catch (err) {
-                        this.logger.error(`Error processing diskStorage file for ${fileField}: ${err.message}`, err.stack);
+                        this.logger.error(`Error uploading diskStorage file for ${fileField}: ${err.message}`, err.stack);
+                        // In strict mode UploadService may throw; in that case, propagate the error
+                        const strict = (process.env.CLOUDINARY_STRICT_UPLOAD || '').toLowerCase() === 'true';
+                        if (strict) throw err;
                     }
                     return;
                 }
@@ -278,27 +283,22 @@ export class UsersService {
                         }
                     }
 
-                    // Write temporary file and use UploadService to handle provider upload
                     const uploadType = (fileField === 'cvFile') ? 'cv' : (fileField === 'logoFile' || fileField === 'companyLogoFile') ? 'logos' : (fileField === 'postalCardFile') ? 'postalCards' : 'profiles';
-                    const uploadBase = this.uploadService.getUploadPath(uploadType);
-                    if (!fs.existsSync(uploadBase)) fs.mkdirSync(uploadBase, { recursive: true });
-                    const ext = (file.originalname || '').split('.').pop() || 'bin';
-                    const fileName = `${fileField}_${Date.now()}.${ext}`;
-                    const filePath = path.join(uploadBase, fileName);
-                    await fs.promises.writeFile(filePath, finalBuffer);
 
-                    // Create a temporary file-like object for UploadService
-                    const tmpFile = { ...(file as any), path: filePath, filename: fileName } as Express.Multer.File & { path: string };
-                    const resp = await this.uploadService.createUploadResponse(tmpFile, uploadType);
-                    const storedPath = resp.url || `/uploads/${uploadType}/${fileName}`;
+                    // Pass the buffer-containing file directly to UploadService which supports buffer uploads (no temp file)
+                    const bufferFile = { ...(file as any), buffer: finalBuffer } as Express.Multer.File & { buffer: Buffer };
+                    const resp = await this.uploadService.createUploadResponse(bufferFile, uploadType);
+                    const storedPath = resp.url || `/uploads/${uploadType}/${resp.filename || 'file'}`;
                     if (entityFieldOverride) {
                         (userToUpdate as any)[entityFieldOverride] = storedPath;
                     } else {
                         (updateUserDto as any)[fileField] = storedPath;
                     }
-                    this.logger.log(`File ${fileName} uploaded via UploadService for user ${id}, storedPath=${storedPath}`);
+                    this.logger.log(`File uploaded via UploadService for user ${id}, storedPath=${storedPath}`);
                 } catch (error) {
                     this.logger.error(`Failed to process in-memory file for ${fileField} for user ${id}: ${error.message}`, error.stack);
+                    const strict = (process.env.CLOUDINARY_STRICT_UPLOAD || '').toLowerCase() === 'true';
+                    if (strict) throw error;
                 }
             }
         };

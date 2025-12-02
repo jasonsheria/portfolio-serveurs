@@ -9,6 +9,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Message, MessageSchema } from '../entity/messages/message.schema';
 import { User, UserSchema } from '../entity/users/user.schema';
 import { BotModule } from '../bot/bot.module'; // Importer le module Bot si MessagesService utilise des services de bot
+import { UploadModule } from '../upload/upload.module';
 @Module({
   imports: [
     // 3. Configurer MongooseModule pour ce module
@@ -22,6 +23,7 @@ import { BotModule } from '../bot/bot.module'; // Importer le module Bot si Mess
     // AuthModule, // Si MessagesService utilise des services d'authentification, importez AuthModule ici
     UsersModule, // Si MessagesService utilise des services d'utilisateurs, importez UsersModule ici
     forwardRef(() => BotModule), // Si MessagesService utilise des services de bot, importez BotModule ici avec forwardRef
+  UploadModule,
     // Si MessagesService utilise des services d'autres modules, importez ces modules ici
     // par exemple, si canAccessConversation interagit avec des utilisateurs, vous pourriez avoir besoin d'importer un UsersModule
     // UsersModule,

@@ -28,23 +28,21 @@ export class TemplateService {
     for (const file of files) {
       try {
         const fileObj = file as Express.Multer.File & { path?: string };
-        // Ensure there's a local path for UploadService to pick up (write buffer to disk if needed)
-        if (!fileObj.path && (fileObj as any).buffer) {
-          const uploadBase = this.uploadService.getUploadPath(`templates/${siteId}`);
-          if (!fs.existsSync(uploadBase)) fs.mkdirSync(uploadBase, { recursive: true });
-          const ext = path.extname(fileObj.originalname) || '.png';
-          const filename = `template_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
-          const filePath = path.join(uploadBase, filename);
-          fs.writeFileSync(filePath, (fileObj as any).buffer);
-          (fileObj as any).path = filePath;
-          (fileObj as any).filename = filename;
-        }
-        const resp = await this.uploadService.createUploadResponse(fileObj, `templates/${siteId}`);
-        if (resp && resp.url) imageUrls.push(resp.url);
-        else {
-          // fallback to local path pattern if uploadService didn't return url
-          const filename = (fileObj as any).filename || fileObj.originalname;
-          imageUrls.push(`/uploads/templates/${siteId}/${filename}`);
+        // If file.buffer exists, pass buffer directly to UploadService (no temp files)
+        if ((fileObj as any).buffer && !(fileObj as any).path) {
+          const bufferFile = { ...(fileObj as any), buffer: (fileObj as any).buffer } as Express.Multer.File & { buffer: Buffer };
+          const resp = await this.uploadService.createUploadResponse(bufferFile, `templates/${siteId}`);
+          if (resp && resp.url) imageUrls.push(resp.url);
+          else {
+            const strict = (process.env.CLOUDINARY_STRICT_UPLOAD || '').toLowerCase() === 'true';
+            if (strict) throw new Error('UploadService did not return a url for template image in strict mode');
+            const filename = (fileObj as any).filename || fileObj.originalname;
+            imageUrls.push(`/uploads/templates/${siteId}/${filename}`);
+          }
+        } else {
+          // If there's an existing local path (diskStorage), let UploadService handle it
+          const resp = await this.uploadService.createUploadResponse(fileObj as any, `templates/${siteId}`);
+          if (resp && resp.url) imageUrls.push(resp.url);
         }
       } catch (err) {
         // on error, skip this file but log
@@ -103,11 +101,16 @@ export class TemplateService {
     // Suppression physique des images
     if (tpl.images && Array.isArray(tpl.images)) {
       for (const imgUrl of tpl.images) {
-        const imgPath = path.join('/uploads', imgUrl.startsWith('/') ? imgUrl.slice(1) : imgUrl);
         try {
-          if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+          // Only attempt to remove local files (paths starting with /uploads or uploads/)
+          if (typeof imgUrl === 'string' && (imgUrl.startsWith('/uploads') || imgUrl.startsWith('uploads/'))) {
+            const imgPath = path.join(process.cwd(), imgUrl.startsWith('/') ? imgUrl.slice(1) : imgUrl);
+            if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+          } else {
+            // For cloud URLs (https://...), we do not attempt local removal here.
+          }
         } catch (err) {
-          console.error('Erreur suppression image:', imgPath, err);
+          console.error('Erreur suppression image:', imgUrl, err);
         }
       }
     }

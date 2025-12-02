@@ -95,14 +95,33 @@ export class UploadService {
   async createUploadResponse(file: Express.Multer.File, folder: string = 'general') {
     // Normalize filename fallback (some multer variants may not set `filename`)
     const safeFilename = (file as any).filename || (file as any).originalname || `file-${Date.now()}`;
-
-    // If Cloudinary provider is configured, upload the local file to Cloudinary and return cloud info.
+    // If Cloudinary provider is configured, prefer uploading from memory if buffer available
     if ((process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary' && this.cloudinaryService) {
       try {
+        // Prefer buffer (memoryStorage) upload to avoid creating local files
+        const buffer: Buffer | undefined = (file as any).buffer;
+        if (buffer && buffer.length > 0) {
+          const result = await this.cloudinaryService.uploadBuffer(buffer, folder, safeFilename);
+          const returnedFilename = result.public_id ? `${result.public_id}.${result.format}` : result.public_id || safeFilename;
+          try {
+            this.logger.log(`Cloudinary upload result: secure_url=${result.secure_url} public_id=${result.public_id} bytes=${result.bytes} format=${result.format}`);
+            this.logger.debug(`Cloudinary raw response: ${JSON.stringify(result)}`);
+          } catch (logErr) {}
+          return {
+            url: result.secure_url || this.getPublicUrl(returnedFilename, folder),
+            filename: returnedFilename,
+            size: result.bytes || file.size,
+            mimetype: result.format || file.mimetype,
+            uploadedAt: result.created_at || new Date().toISOString(),
+            provider: 'cloudinary',
+            raw: result,
+          };
+        }
+
+        // Fallback: if multer used diskStorage and provided a local path, upload that file and remove it
         const localPath = (file as any).path || file.path || null;
         if (!localPath) {
-          this.logger.warn('File has no local path, cannot upload to Cloudinary');
-          // Fallback to a public URL based on configured base or local uploads folder
+          this.logger.warn('File has no local path or buffer to upload to Cloudinary');
           return {
             url: this.getPublicUrl(safeFilename, folder),
             filename: safeFilename,
@@ -114,16 +133,10 @@ export class UploadService {
 
         const result = await this.cloudinaryService.uploadAndRemove(localPath, folder);
         const returnedFilename = result.public_id ? `${result.public_id}.${result.format}` : result.public_id || safeFilename;
-
-        // Detailed logging for diagnostics: record cloudinary response summary
         try {
-          this.logger.log(`Cloudinary upload result for localPath=${localPath}: secure_url=${result.secure_url} public_id=${result.public_id} bytes=${result.bytes} format=${result.format}`);
-          // Optionally stringify raw response at debug level (avoid huge logs at info)
+          this.logger.log(`Cloudinary upload result for localPath: secure_url=${result.secure_url} public_id=${result.public_id} bytes=${result.bytes} format=${result.format}`);
           this.logger.debug(`Cloudinary raw response: ${JSON.stringify(result)}`);
-        } catch (logErr) {
-          // ignore logging errors
-        }
-
+        } catch (logErr) {}
         return {
           url: result.secure_url || this.getPublicUrl(returnedFilename, folder),
           filename: returnedFilename,
@@ -135,7 +148,8 @@ export class UploadService {
         };
       } catch (e) {
         this.logger.error('Cloudinary upload failed', e as any);
-        // fallback to local url
+        const strict = (process.env.CLOUDINARY_STRICT_UPLOAD || '').toLowerCase() === 'true';
+        if (strict) throw e;
         try {
           this.logger.warn(`Falling back to local url for file ${safeFilename} (size=${file.size} mimetype=${file.mimetype})`);
         } catch (logErr) {}

@@ -1,13 +1,15 @@
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { join, extname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
+const UPLOADS_BASE = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
+
 export const chatUploadConfig = {
-  storage: diskStorage({
+  storage: (process.env.STORAGE_PROVIDER || '').toLowerCase() === 'cloudinary' ? memoryStorage() : diskStorage({
     destination: (req, file, cb) => {
       // Déterminer le sous-dossier selon le type de fichier
       const fileType = getFileType(file.mimetype);
-      const uploadPath = join('/uploads', 'chat', fileType);
+      const uploadPath = join(UPLOADS_BASE, 'chat', fileType);
       
       if (!existsSync(uploadPath)) {
         mkdirSync(uploadPath, { recursive: true });

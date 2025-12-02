@@ -20,6 +20,7 @@ import { botDTO } from '../bot/dto/bot.dto';
 import { BotService } from '../bot/bot.service';
 import { messageFileUploadInterceptor } from './utils/upload.config';
 import { FileTypeValidators } from './utils/file.config';
+import { UploadService } from '../upload/upload.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RequestWithUser } from '../common/types/request.interface';
 import * as fs from 'fs';
@@ -40,6 +41,7 @@ export class MessagesController {
     constructor(
         private readonly messagesService: MessagesService, // Remplacez 'any' par le type approprié
         private readonly botService: BotService, // Assurez-vous que le service Bot est injecté si nécessaire
+        private readonly uploadService: UploadService,
     ) {}
 
     @Post('send')
@@ -126,24 +128,28 @@ export class MessagesController {
                     throw new BadRequestException('Invalid file type');
                 }
 
-                // Save file metadata to database
+                // Use UploadService to upload to provider (Cloudinary) or return local path when provider not configured
+                const uploadFolder = `messages/${fileType}`;
+                const resp = await this.uploadService.createUploadResponse(file as any, uploadFolder);
+
+                // Persist metadata using the provider URL (or local path fallback returned by UploadService)
                 const fileMetadata = await this.messagesService.saveFileMetadata({
                     userId: req.user.id, // Using id instead of _id as Document provides id getter
                     originalName: file.originalname,
-                    filename: file.filename,
+                    filename: resp.filename || file.filename,
                     type: fileType,
-                    path: file.path,
-                    size: file.size
+                    path: resp.url || file.path,
+                    size: resp.size || file.size
                 });
 
-                // Return file info including type and path
+                // Return file info including provider URL
                 return {
                     id: fileMetadata._id,
                     originalName: file.originalname,
-                    filename: file.filename,
+                    filename: resp.filename || file.filename,
                     type: fileType,
-                    path: file.path,
-                    size: file.size
+                    path: resp.url || file.path,
+                    size: resp.size || file.size
                 };
             } catch (error) {
                 // Clean up the file if something goes wrong

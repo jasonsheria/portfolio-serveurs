@@ -80,20 +80,14 @@ export class AuthService {
         // If file is in-memory (buffer), create a temporary file and pass it through uploadService
         let fileToUse = profileImage as Express.Multer.File & { path?: string };
         if (!fileToUse.path && fileToUse.buffer) {
-          // write buffer to a temp file under uploads/profiles
-          const uploadBase = this.uploadService.getUploadPath('profiles');
-          if (!fs.existsSync(uploadBase)) fs.mkdirSync(uploadBase, { recursive: true });
-          const ext = (fileToUse.originalname || 'img').split('.').pop() || 'png';
-          const fileName = `profile-${Date.now()}-${uuidv4()}.${ext}`;
-          const targetPath = path.join(uploadBase, fileName);
-          fs.writeFileSync(targetPath, fileToUse.buffer);
-          // assign path so uploadService can pick it up
-          (fileToUse as any).path = targetPath;
-          (fileToUse as any).filename = fileName;
+          // Pass buffer directly to UploadService (no temp file)
+          const bufferFile = { ...(fileToUse as any), buffer: fileToUse.buffer } as Express.Multer.File & { buffer: Buffer };
+          const uploadResp = await this.uploadService.createUploadResponse(bufferFile, 'profiles');
+          profileUrl = uploadResp.url || '';
+        } else {
+          const uploadResp = await this.uploadService.createUploadResponse(fileToUse, 'profiles');
+          profileUrl = uploadResp.url || '';
         }
-
-        const uploadResp = await this.uploadService.createUploadResponse(fileToUse, 'profiles');
-        profileUrl = uploadResp.url || '';
         this.logger.log(`Profile image processed. URL=${profileUrl}`);
       } catch (error) {
         console.error('Erreur lors du traitement de l image de profil:', error);
