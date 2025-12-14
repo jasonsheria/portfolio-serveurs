@@ -115,6 +115,22 @@ export class Mobilier extends Document {
   @Prop({ type: [String], default: [] })
   documents: string[]; // URLs des documents (titre de propriété, etc.)
 
+  // Promotion fields
+  @Prop({ type: Boolean, default: false })
+  promotion: boolean;
+
+  @Prop()
+  promoPrice: number;
+
+  @Prop()
+  promoStart: Date;
+
+  @Prop()
+  promoEnd: Date;
+
+  @Prop()
+  promoComment: string;
+
   // Relations
   @Prop({ 
     type: Types.ObjectId,

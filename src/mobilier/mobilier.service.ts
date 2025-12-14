@@ -49,6 +49,12 @@ export class MobilierService {
       if (surface_min) filter.surface.$gte = Number(surface_min);
       if (surface_max) filter.surface.$lte = Number(surface_max);
     }
+    // Promotion filter: allow boolean or string 'true'/'false'
+    if (query && Object.prototype.hasOwnProperty.call(query, 'promotion')) {
+      const val = query.promotion;
+      if (val === true || val === 'true') filter.promotion = true;
+      else if (val === false || val === 'false') filter.promotion = false;
+    }
 
     const total = await this.mobilierModel.countDocuments(filter);
     const pages = Math.ceil(total / limit);
@@ -140,8 +146,11 @@ export class MobilierService {
   }
 
   async update(id: string, data: Partial<Mobilier>): Promise<Mobilier> {
+    // Use $set to update only the provided fields and avoid unintentionally
+    // replacing arrays/objects when the client didn't include them.
+    const update = { $set: data };
     const mobilier = await this.mobilierModel
-      .findByIdAndUpdate(id, data, { new: true })
+      .findByIdAndUpdate(id, update, { new: true })
       .populate({
         path: 'proprietaire',
         select: '-password'
