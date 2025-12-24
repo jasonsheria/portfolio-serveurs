@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Reservation } from './reservation.schema';
 import { Mobilier } from '../mobilier/mobilier.schema';
+import { Vehicule } from '../vehicule/vehicule.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class ReservationsService {
     constructor(
         @InjectModel(Reservation.name) private reservationModel: Model<Reservation>,
         @InjectModel(Mobilier.name) private mobilierModel: Model<Mobilier>,
+        @InjectModel(Vehicule.name) private vehiculeModel: Model<Vehicule>,
         private readonly notificationsService: NotificationsService,
     ) { }
 
@@ -124,13 +126,18 @@ export class ReservationsService {
         } catch (e) {
             throw new BadRequestException('Invalid propertyId format');
         }
+        console.log("Creating reservation for propertyId:", propertyId.toString());
 
         const mobilier = await this.mobilierModel.findById(propertyId).exec();
-        if (!mobilier) {
+        const vehicule = await this.vehiculeModel.findById( propertyId).exec();
+       
+
+        if (!mobilier && !vehicule) {
+            console.log("property not found");
             throw new BadRequestException('Property not found');
         }
-        const ownerId = mobilier.proprietaire;
-
+        const ownerId = mobilier?.proprietaire || vehicule?.proprietaire;
+        console.log("ownerId", ownerId);
         const reservationDoc = await this.reservationModel.create({
             property: propertyId,
             user: userId ? new Types.ObjectId(userId.toString()) : undefined,
@@ -143,6 +150,7 @@ export class ReservationsService {
             expired: false,
             name : body.name,
         });
+        console.log("Reservation created:", reservationDoc);
 
         // Create a notification for the property owner and for the reserving user
         try {
@@ -151,7 +159,7 @@ export class ReservationsService {
             if (ownerId) {
                 const ownerTarget = ownerId.toString ? ownerId.toString() : ownerId;
                 const titleOwner = 'Nouvelle réservation';
-                const messageOwner = `Votre bien "${mobilier.titre || 'votre annonce'}" a été réservé pour le ${body.date || ''} ${body.time || ''}`;
+                const messageOwner = `Votre bien "${mobilier?.titre || vehicule?.nom || 'votre annonce'}" a été réservé pour le ${body.date || ''} ${body.time || ''}`;
 
                 await this.notificationsService.create({
                     user: ownerTarget,
@@ -165,7 +173,7 @@ export class ReservationsService {
                 // Also notify the sender (confirmation) if distinct from owner
                 if (senderId && senderId !== ownerTarget) {
                     const titleSender = 'Réservation enregistrée';
-                    const messageSender = `Votre réservation pour "${mobilier.titre || 'le bien'}" le ${body.date || ''} ${body.time || ''} a bien été enregistrée.`;
+                    const messageSender = `Votre réservation pour "${mobilier?.titre || vehicule?.nom || 'le bien'}" le ${body.date || ''} ${body.time || ''} a bien été enregistrée.`;
                     try {
                         await this.notificationsService.create({
                             user: senderId,
@@ -209,7 +217,7 @@ export class ReservationsService {
 
             for (const q of tryQueries) {
                 this.logger.debug(`findByUser attempting query: ${JSON.stringify(q)}`);
-                const results = await this.reservationModel.find(q).sort({ createdAt: -1 }).populate('property').lean().exec();
+                const results = await this.reservationModel.find(q).sort({ createdAt: -1 }).lean().exec();
                 if (Array.isArray(results) && results.length > 0) {
                     this.logger.log(`findByUser: found ${results.length} reservations for query ${JSON.stringify(q)}`);
                     return {data : results};
