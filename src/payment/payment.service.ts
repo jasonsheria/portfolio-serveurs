@@ -150,7 +150,7 @@ export class PaymentService {
             // Sauvegarder le paiement dans la base de données
             const payment = new this.paymentModel(paymentRecord);
             const pay = await payment.save();
-            console.log(pay)
+            // console.log(pay)
             // En mode test, on retourne une URL de simulation
             return {
                 paymentUrl: responseData.payment_url,
@@ -218,7 +218,7 @@ export class PaymentService {
 
             // Activer l'abonnement
             const owner = await this.ownerModel.findById(accountId);
-            console.log("owner apres payement : "+ owner)
+            // console.log("owner apres payement : "+ owner)
             if (owner) {
                 owner.isActive = true;
                 owner.subscriptionType = plan;
@@ -280,11 +280,11 @@ export class PaymentService {
         return payments;
     }
     async getPaymentBySite(siteId: string): Promise<Payment | null> {
-        console.log("le site id recu vaut :", siteId)
+        // console.log("le site id recu vaut :", siteId)
         const site = await this.siteModel.findById(siteId);
         if (!site) {
             console.warn(`Site avec _id=${siteId} non trouvé`, 'PaymentService');
-            console.log(`Site avec _id=${siteId} non trouvé`, 'PaymentService');
+            // console.log(`Site avec _id=${siteId} non trouvé`, 'PaymentService');
             throw new NotFoundException(`Site with id ${siteId} not found`);
         }
         // On recherche le paiement lié à ce site (cast siteId en ObjectId)
@@ -294,10 +294,10 @@ export class PaymentService {
             .exec();
         if (!payment) {
             console.warn(`Aucun paiement trouvé pour le site avec _id=${siteId}`, 'PaymentService');
-            console.log(`Aucun paiement trouvé pour le site avec _id=${siteId}`, 'PaymentService');
+            // console.log(`Aucun paiement trouvé pour le site avec _id=${siteId}`, 'PaymentService');
             return null;
         }
-        console.log("le payment recu vaut :", payment)
+        // console.log("le payment recu vaut :", payment)
         return payment;
          }
 }

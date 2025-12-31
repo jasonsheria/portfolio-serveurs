@@ -43,20 +43,20 @@ async function bootstrap() {
       if (!isProduction) {
         // Autoriser localhost sur tous les ports
         if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
-          console.log(`[CORS] Allowing origin: ${origin || 'no-origin'}`);
+          // console.log(`[CORS] Allowing origin: ${origin || 'no-origin'}`);
           return callback(null, true);
         }
       }
       
       // Autoriser les requêtes sans origin (ex: curl, tests locaux, mobile apps)
       if (!origin) {
-        console.log('[CORS] Allowing no-origin request (curl/postman/mobile)');
+        // console.log('[CORS] Allowing no-origin request (curl/postman/mobile)');
         return callback(null, true);
       }
       
       // Vérifier les origins autorisées
       if (allowedOrigins.includes(origin)) {
-        console.log(`[CORS] Allowing whitelisted origin: ${origin}`);
+        // console.log(`[CORS] Allowing whitelisted origin: ${origin}`);
         return callback(null, true);
       }
       
@@ -82,7 +82,7 @@ async function bootstrap() {
   // Middleware global pour gérer les erreurs CORS
   app.use((req, res, next) => {
     // Log des requêtes pour debugging
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Origin: ${req.headers.origin || 'no-origin'}`);
+    // console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Origin: ${req.headers.origin || 'no-origin'}`);
     
     // Headers CORS de secours pour les requêtes qui passent
     res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -92,7 +92,7 @@ async function bootstrap() {
     
     // Répondre immédiatement aux requêtes OPTIONS (preflight)
     if (req.method === 'OPTIONS') {
-      console.log('[CORS] Handling preflight request');
+      // console.log('[CORS] Handling preflight request');
       return res.status(200).end();
     }
     
@@ -111,7 +111,7 @@ async function bootstrap() {
   // En production (Render), utiliser le disque persistant /upload
   // En local, utiliser le dossier uploads du projet
   const uploadsPath = process.env.NODE_ENV === 'production' ? '/upload' : path.join(process.cwd(), 'uploads');
-  console.log(`[STATIC] Serving uploads from: ${uploadsPath}`);
+  // console.log(`[STATIC] Serving uploads from: ${uploadsPath}`);
   app.useStaticAssets(uploadsPath, {
     prefix: '/uploads', // Ce préfixe doit correspondre à celui utilisé dans pictureUrl
     fallthrough: false, // Pour que les erreurs soient catchées ici
@@ -123,7 +123,7 @@ async function bootstrap() {
   // Définir le port d'écoute
   const port = process.env.PORT || 5000; // Use a port allowed by Render.com
   await app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+    // console.log(`Server running on port ${port}`);
   });
 }
 bootstrap();

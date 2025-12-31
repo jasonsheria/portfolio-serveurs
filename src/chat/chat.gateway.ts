@@ -57,7 +57,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     // Cette méthode est appelée une fois que la gateway a été initialisée
     afterInit(server: Server) {
         this.logger.log('Gateway Chat initialisée');
-        console.log('Gateway Chat initialisée');
+        // console.log('Gateway Chat initialisée');
         // Register authentication middleware BEFORE connection handlers so it runs on incoming sockets
         // This ensures socket.data.user is available inside the connection handler.
         server.use(async (socket: Socket & { data?: { user?: User } }, next) => {
@@ -113,7 +113,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             const handleGetHistory = async (payload: any, callback?: Function) => {
                 try {
                     this.logger.log(`[SOCKET] getMessageHistory request from socket=${socket.id} payload=${JSON.stringify(payload || {})}`);
-                    console.log(`[SOCKET] getMessageHistory request from socket=${socket.id} payload=${JSON.stringify(payload || {})}`);
+                    // console.log(`[SOCKET] getMessageHistory request from socket=${socket.id} payload=${JSON.stringify(payload || {})}`);
                     // Simplified: only a user id is required to fetch history.
                     // Accept either payload.userId or payload.user for compatibility.
                     const userId = payload && (payload.userId || payload.user) ? String(payload.userId || payload.user) : null;
@@ -223,7 +223,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             (async () => {
                 try {
                     const unread = await this.notificationsService.findUnread(userId);
-                    // console.log("unreed messages:", unread);
+                    // // console.log("unreed messages:", unread);
                     if (Array.isArray(unread) && unread.length > 0) {
                         // Normalize the payload to match frontend expectations
                         const payload = unread.map((item: any) => ({

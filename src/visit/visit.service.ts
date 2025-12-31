@@ -28,7 +28,7 @@ export class VisitService {
       return this.visitModel.find({ template: id }).sort({ date: -1 }).exec();
     }
    
-    // console.log('[VISIT] Recherche des visites pour le template', tpl._id);
+    // // console.log('[VISIT] Recherche des visites pour le template', tpl._id);
     // Retourne les visites associées à ce template
     const data = this.visitModel.find({ template: temp })
       .sort({ date: -1 });

@@ -64,10 +64,10 @@ export class BotService {
      * Includes error handling for the loading and embedding process.
      */
     private async initVectorStore() {
-        console.log("Starting vector store initialization...");
+        // console.log("Starting vector store initialization...");
         try {
             // Load the PDF document using pdf-parse and wrap into LangChain Document(s)
-            console.log(`Loading PDF from: ${pdfPath}`);
+            // console.log(`Loading PDF from: ${pdfPath}`);
             const fileBuffer = await fs.readFile(pdfPath);
             const parsed = await pdf(fileBuffer as Buffer);
             const text = (parsed && (parsed as any).text) ? (parsed as any).text : '';
@@ -82,31 +82,31 @@ export class BotService {
                 this.isVectorStoreInitialized = false;
                 return; // Exit initialization if no documents are loaded
             }
-            console.log(`Successfully loaded ${docs.length} document(s) from PDF.`);
+            // console.log(`Successfully loaded ${docs.length} document(s) from PDF.`);
 
             // Split the documents into smaller chunks
-            console.log("Splitting documents...");
+            // console.log("Splitting documents...");
             const textSplitter = new RecursiveCharacterTextSplitter({ chunkSize: 1000, chunkOverlap: 200 });
             const splitDocs = await textSplitter.splitDocuments(docs);
-            console.log(`Split into ${splitDocs.length} chunks.`);
+            // console.log(`Split into ${splitDocs.length} chunks.`);
 
             // Create embeddings and the vector store
-            console.log("Creating embeddings and vector store...");
+            // console.log("Creating embeddings and vector store...");
             // Use FakeEmbeddings for now so compilation works reliably. Replace with
             // HuggingFaceInferenceEmbeddings (or another provider) when available.
             this.vectorStore = await MemoryVectorStore.fromDocuments(
                 splitDocs,
                 new FakeEmbeddings()
             );
-            console.log("Vector store created successfully (using FakeEmbeddings).");
+            // console.log("Vector store created successfully (using FakeEmbeddings).");
 
             // Create a retriever from the vector store
             this.retriever = this.vectorStore.asRetriever(3); // Retrieve top 3 relevant documents
-            console.log("Retriever created.");
+            // console.log("Retriever created.");
 
             // Set initialization flag to true upon success
             this.isVectorStoreInitialized = true;
-            console.log("Vector store initialization complete.");
+            // console.log("Vector store initialization complete.");
 
         } catch (error) {
             // Catch any errors during the initialization process (loading, splitting, embedding, vector store creation)
@@ -133,7 +133,7 @@ export class BotService {
         }
         // Vérifie d'abord le cache pour les questions fréquentes
         if (this.responseCache.has(normalizedMessage)) {
-            console.log(`[BOT] Réponse depuis le cache pour : "${normalizedMessage}"`);
+            // console.log(`[BOT] Réponse depuis le cache pour : "${normalizedMessage}"`);
             return this.responseCache.get(normalizedMessage)!;
         }
         let botResponse: string;
@@ -197,7 +197,7 @@ export class BotService {
      */
     async formalise(asked: string): Promise<string> {
         // Implement formalization logic here
-        // console.log(`Formalising question: "${asked}"`);
+        // // console.log(`Formalising question: "${asked}"`);
         return "Formalised response based on asked question";
     }
 
@@ -208,7 +208,7 @@ export class BotService {
      */
     async personneldata(data: string): Promise<string> {
         // Implement personal data processing logic here
-        // console.log(`Processing personal data: "${data}"`);
+        // // console.log(`Processing personal data: "${data}"`);
         return "Personal data processed";
     }
 }

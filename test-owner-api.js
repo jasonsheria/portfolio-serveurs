@@ -35,7 +35,7 @@ axios.post('http://localhost:3000/api/owner/create', formData, {
   }
 })
 .then(response => {
-  console.log('Success:', response.data);
+  // console.log('Success:', response.data);
 })
 .catch(error => {
   console.error('Error:', error.response ? error.response.data : error.message);

@@ -1,12 +1,12 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Param, 
-  Delete, 
-  Put, 
-  UseGuards, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Put,
+  UseGuards,
   Req,
   UseInterceptors,
   UploadedFiles,
@@ -29,7 +29,7 @@ export class MobilierController {
   constructor(
     private readonly mobilierService: MobilierService,
     private readonly uploadService: UploadService
-  ) {}
+  ) { }
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -140,8 +140,8 @@ export class MobilierController {
       // Log payload summary (avoid logging everything for privacy)
       try {
         this.logger.log(`Creating Mobilier: titre='${data?.titre || ''}' proprietaire=${userId} images_count=${(createPayload.images || []).length} videos_count=${(createPayload.videos || []).length} documents_count=${(createPayload.documents || []).length}`);
-        this.logger.debug(`createPayload images sample: ${JSON.stringify(createPayload.images.slice(0,5))}`);
-      } catch (e) {}
+        this.logger.debug(`createPayload images sample: ${JSON.stringify(createPayload.images.slice(0, 5))}`);
+      } catch (e) { }
 
       if (data && data.agentId) {
         try {
@@ -157,7 +157,7 @@ export class MobilierController {
       try {
         this.logger.log(`Mobilier created id=${created?._id || created.id || 'unknown'}`);
         this.logger.debug(`Stored images: ${JSON.stringify(created?.images || created?.images || [])}`);
-      } catch (e) {}
+      } catch (e) { }
 
       return created;
     } catch (error) {
@@ -185,11 +185,11 @@ export class MobilierController {
       // return array to match frontend expectations
       const items = res && res.data ? res.data : [];
       // log sample for debugging
-      try { this.logger.log(`Promotions requested offset=${offset} limit=${limit} returned=${items.length}`); } catch (e) {}
+      try { this.logger.log(`Promotions requested offset=${offset} limit=${limit} returned=${items.length}`); } catch (e) { }
       return items;
     } catch (err) {
       // log error and rethrow to let Nest handle response
-      try { this.logger.error('Error fetching promotions', err && (err.stack || err.message || err)); } catch (e) {}
+      try { this.logger.error('Error fetching promotions', err && (err.stack || err.message || err)); } catch (e) { }
       throw err;
     }
   }
@@ -205,7 +205,7 @@ export class MobilierController {
   @UseGuards(JwtAuthGuard)
   async findByOwner(@Param('ownerId') ownerId: string, @Query() query: any) {
 
-    console.log("is owner", ownerId);
+    // console.log("is owner", ownerId);
     return this.mobilierService.findByProprietaire(ownerId, 'User', query);
   }
 
@@ -273,6 +273,7 @@ export class MobilierController {
         const docValidation = this.uploadService.validateDocumentFile(uploaded.newDocuments[0]);
         if (!docValidation.valid) throw new BadRequestException(docValidation.error);
       }
+
 
       const data = JSON.parse(dataString);
       const userId = req.user.userId;
@@ -347,6 +348,7 @@ export class MobilierController {
         // if promotion is false or clearing fields, that's allowed
       }
 
+
       return this.mobilierService.update(id, updateData);
     } catch (error) {
       if (error instanceof SyntaxError) {
@@ -356,24 +358,35 @@ export class MobilierController {
     }
   }
 
-  @Delete(':id')
+ @Delete(':id')
   @UseGuards(JwtAuthGuard)
   async remove(@Param('id') id: string, @Req() req) {
     const userId = req.user.userId;
     const userType = req.user.type || 'User';
-    console.log("user ", userId, " type ", userType);
-    console.log("id", id);
-    try { console.log('DELETE.authorization header:', req.headers?.authorization); } catch(e){}
-    try { console.log('DELETE.req.user:', JSON.stringify(req.user)); } catch(e) { console.log('DELETE.req.user (raw):', req.user); }
-    // Vérifier que l'utilisateur est bien le propriétaire
-    const mobilier = await this.mobilierService.findOne(id);
-    console.log("mobilier trouver",mobilier)
-    try { console.log('DELETE.mobilier.proprietaire (raw):', mobilier?.proprietaire, 'toString:', mobilier?.proprietaire?.toString?.()); } catch(e){}
-    if (!mobilier || mobilier.proprietaire._id.toString() !== userId) {
-      console.warn(`Unauthorized delete attempt on mobilier ${id} by user ${userId}. proprietaire=${mobilier?.proprietaire?._id?.toString()} proprietaireType=${mobilier?.proprietaireType} tokenType=${userType}`);
-      throw new BadRequestException('Non autorisé à supprimer ce bien');
-    }
 
-    return this.mobilierService.remove(id);
+    try {
+      // 1. Find the item
+      const mobilier = await this.mobilierService.findOne(id);
+
+      // 2. Security Check: Ensure item exists and belongs to the user
+      if (!mobilier || mobilier.proprietaire._id.toString() !== userId) {
+        this.logger.warn(
+          `Unauthorized delete attempt on mobilier ${id} by user ${userId}. ` +
+          `Proprietaire=${mobilier?.proprietaire?._id?.toString()}`
+        );
+        throw new BadRequestException('Non autorisé à supprimer ce bien');
+      }
+
+      // 3. Perform deletion
+      return await this.mobilierService.remove(id);
+      
+    } catch (error) {
+      // Re-throw NestJS exceptions, otherwise wrap in a generic error
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(`Error deleting mobilier ${id}:`, error.message);
+      throw new BadRequestException('Une erreur est survenue lors de la suppression');
+    }
   }
-}
+} // Final closing brace for the class

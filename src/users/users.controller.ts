@@ -54,7 +54,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Delete('api/delete-account')
   async deleteAccount(@Req() req, @Body('password') password: string) {
-    console.log('[BACKEND][deleteAccount] req.user =', req.user);
+    // console.log('[BACKEND][deleteAccount] req.user =', req.user);
     // L'utilisateur authentifié est injecté par le guard JWT
     const user = req.user;
 const userId = user._id || user.userId || user.id || user.sub;

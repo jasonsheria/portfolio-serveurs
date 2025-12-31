@@ -375,7 +375,7 @@ export class PostsService {
   async searchPostsByCriteria(
     criteria: SearchPostsByCriteriaDto,
   ): Promise<any[]> { // Changement du type de retour pour inclure commentsCount
-    console.log('[searchPostsByCriteria] Appel avec critères:', JSON.stringify(criteria));
+    // console.log('[searchPostsByCriteria] Appel avec critères:', JSON.stringify(criteria));
     // --- LOGIQUE DE FILTRAGE SPÉCIFIQUE DEMANDÉE ---
     // Correction : n'exclure que si la combinaison n'est PAS demandée
     if (!(
@@ -421,7 +421,7 @@ export class PostsService {
       }
     } else if (siteName) {
       const site = await this.siteModel.findOne({ siteName: siteName }).select('_id user').lean();
-      console.log('[searchPostsByCriteria] Recherche site:', siteName, '=>', site);
+      // console.log('[searchPostsByCriteria] Recherche site:', siteName, '=>', site);
       if (!site) {
         console.warn(`Site not found for name: ${siteName}`);
         return [];
@@ -437,7 +437,7 @@ export class PostsService {
       }
     } else if (userEmail) {
       const user = await this.userModel.findOne({ email: userEmail }).select('_id').lean();
-      console.log('[searchPostsByCriteria] Recherche user:', userEmail, '=>', user);
+      // console.log('[searchPostsByCriteria] Recherche user:', userEmail, '=>', user);
       if (user) {
         query.user = user._id;
       } else {
@@ -502,8 +502,8 @@ export class PostsService {
       }
     }
 
-    console.log("Executing search with query:", JSON.stringify(query, null, 2));
-    console.log(`Page: ${page}, Limit: ${limit}, SortBy: ${sortBy}, SortOrder: ${sortOrder}`);
+    // console.log("Executing search with query:", JSON.stringify(query, null, 2));
+    // console.log(`Page: ${page}, Limit: ${limit}, SortBy: ${sortBy}, SortOrder: ${sortOrder}`);
 
     const posts = await this.postModel.find(query)
       .populate('media')

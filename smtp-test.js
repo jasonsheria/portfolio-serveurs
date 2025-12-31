@@ -31,6 +31,6 @@ transporter.sendMail(mailOptions, (error, info) => {
   if (error) {
     return console.error('Erreur SMTP:', error);
   }
-  console.log('Message envoyé: %s', info.messageId);
-  console.log('Aperçu URL: %s', nodemailer.getTestMessageUrl(info));
+  // console.log('Message envoyé: %s', info.messageId);
+  // console.log('Aperçu URL: %s', nodemailer.getTestMessageUrl(info));
 });

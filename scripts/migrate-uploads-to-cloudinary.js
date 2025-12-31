@@ -66,11 +66,11 @@ async function main() {
 
   const client = new MongoClient(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
   await client.connect();
-  console.log('Connected to MongoDB');
+  // console.log('Connected to MongoDB');
 
   const db = client.db();
   const collections = await db.listCollections().toArray();
-  console.log(`Found ${collections.length} collections`);
+  // console.log(`Found ${collections.length} collections`);
 
   const summary = { examinedDocs: 0, matchesFound: 0, uploads: 0, errors: 0, updates: 0 };
 
@@ -78,7 +78,7 @@ async function main() {
 
   for (const coll of collections) {
     const collName = coll.name;
-    console.log('\n-- Processing collection:', collName);
+    // console.log('\n-- Processing collection:', collName);
     const collection = db.collection(collName);
 
     // iterate with a cursor to avoid loading whole collection
@@ -93,7 +93,7 @@ async function main() {
       if (found.length === 0) continue;
 
       summary.matchesFound += found.length;
-      console.log(`Document _id=${doc._id} has ${found.length} upload path(s)`);
+      // console.log(`Document _id=${doc._id} has ${found.length} upload path(s)`);
 
       // build updates for this document
       const updates = {};
@@ -124,7 +124,7 @@ async function main() {
           inferredFolder = parts[0];
         }
 
-        console.log(`  Will upload ${absoluteLocalPath} -> Cloudinary folder ${inferredFolder}`);
+        // console.log(`  Will upload ${absoluteLocalPath} -> Cloudinary folder ${inferredFolder}`);
         if (flags.dryRun) {
           updates[f.dotPath] = `DRY_RUN_WOULD_UPLOAD:${absoluteLocalPath}`;
           summary.uploads += 1;
@@ -138,9 +138,9 @@ async function main() {
           summary.uploads += 1;
           const secure = result.secure_url || result.url;
           updates[f.dotPath] = secure;
-          console.log(`    uploaded -> ${secure}`);
+          // console.log(`    uploaded -> ${secure}`);
           if (flags.removeLocal) {
-            try { fs.unlinkSync(absoluteLocalPath); console.log(`    removed local file ${absoluteLocalPath}`); } catch (e) { console.warn(`    failed to remove ${absoluteLocalPath}: ${e.message}`); }
+            try { fs.unlinkSync(absoluteLocalPath); // console.log(`    removed local file ${absoluteLocalPath}`); } catch (e) { console.warn(`    failed to remove ${absoluteLocalPath}: ${e.message}`); }
           }
         } catch (err) {
           console.error(`    upload failed for ${absoluteLocalPath}:`, err.message || err);
@@ -156,13 +156,13 @@ async function main() {
         try {
           const res = await collection.updateOne({ _id: doc._id }, { $set: setObj });
           summary.updates += res.modifiedCount || 0;
-          console.log(`  updated doc ${doc._id}, modifiedCount=${res.modifiedCount}`);
+          // console.log(`  updated doc ${doc._id}, modifiedCount=${res.modifiedCount}`);
         } catch (err) {
           console.error(`  failed to update doc ${doc._id}:`, err.message || err);
           summary.errors += 1;
         }
       } else if (flags.dryRun && Object.keys(updates).length > 0) {
-        console.log(`  [dry-run] would update doc ${doc._id} with ${Object.keys(updates).length} fields`);
+        // console.log(`  [dry-run] would update doc ${doc._id} with ${Object.keys(updates).length} fields`);
       }
 
       if (flags.limit && summary.examinedDocs >= flags.limit) break;
@@ -170,9 +170,9 @@ async function main() {
     if (flags.limit && summary.examinedDocs >= flags.limit) break;
   }
 
-  console.log('\nMigration summary:', summary);
+  // console.log('\nMigration summary:', summary);
   await client.close();
-  console.log('Disconnected from MongoDB');
+  // console.log('Disconnected from MongoDB');
 }
 
 /**

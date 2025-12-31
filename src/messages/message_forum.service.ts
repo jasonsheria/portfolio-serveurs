@@ -13,7 +13,7 @@ export class MessageForumService {
     if (!data.date) {
       data.date = new Date();
     }
-   console.log('Creating message:', data);
+   // console.log('Creating message:', data);
     const message = new this.messageForumModel(data);
     return message.save();
   }

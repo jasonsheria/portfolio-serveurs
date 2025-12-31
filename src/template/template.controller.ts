@@ -12,32 +12,41 @@ export class TemplateController {
     private readonly uploadService: UploadService,
   ) {}
 
-  @Post('create')
-  @UseInterceptors(FilesInterceptor('images', 3, multerOptions('templates')))
-  async create(
-    @UploadedFiles() files: Express.Multer.File[],
-    @Body() body: any,
-    @Req() req: Request
-  ) {
-    const userId = body.userId;
-    const siteId = body.siteId;
-    if (!userId) throw new BadRequestException('Utilisateur non authentifié');
-    if (!siteId) throw new BadRequestException('Site manquant');
+@Post('create')
+@UseInterceptors(FilesInterceptor('images', 3, multerOptions('templates')))
+async create(
+  @UploadedFiles() files: Express.Multer.File[],
+  @Body() body: any,
+  @Req() req: Request
+) {
+  const userId = body.userId;
+  const siteId = body.siteId;
 
-    // Validate images if provided
-    if (files && files.length > 0) {
-      const imageValidation = this.uploadService.validateImageFiles(files);
-      if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
-    }
+  if (!userId) throw new BadRequestException('Utilisateur non authentifié');
+  if (!siteId) throw new BadRequestException('Site manquant');
 
-    // Upload files to cloud and create template using returned URLs
-    const fileResponses = files && files.length > 0 ? await this.uploadService.createBulkUploadResponse(files, 'templates') : [];
-    console.log('[TemplateController] create: user=', userId, ' site=', siteId, ' uploadedFiles=', files ? files.length : 0);
-    if (fileResponses && fileResponses.length > 0) console.log('[TemplateController] create: fileResponses sample=', fileResponses.map(r => ({ filename: r.filename, url: r.url })).slice(0,5));
-    const created = await this.templateService.createTemplateWithMedia(body, fileResponses, userId, siteId);
-    console.log('[TemplateController] create: created template id=', created._id, ' images_count=', created.images?.length || 0);
-    return created;
+  // Validate images if provided
+  if (files && files.length > 0) {
+    const imageValidation = this.uploadService.validateImageFiles(files);
+    if (!imageValidation.valid) throw new BadRequestException(imageValidation.error);
   }
+
+  // Upload files
+  const fileResponses = files && files.length > 0 
+    ? await this.uploadService.createBulkUploadResponse(files, 'templates') 
+    : [];
+
+  // FIX: Wrap the condition in braces if you want to keep the logic, 
+  // or just remove the 'if' if it was only for the commented-out log.
+  if (fileResponses && fileResponses.length > 0) {
+     // You can put logic here if needed
+  }
+
+  // This 'const' is now safe because it is not part of the 'if' body above
+  const created = await this.templateService.createTemplateWithMedia(body, fileResponses, userId, siteId);
+  
+  return created;
+}
 
   @Post('site')
   async getBySite(@Body() body: any) {
@@ -52,7 +61,7 @@ export class TemplateController {
       // Redirige vers la vraie méthode getAllTemplates si l'URL est /template/getall
       return this.getAllTemplates();
     }
-    console.log('[BACKEND][TemplateController] getOne called with id:', id);
+    // console.log('[BACKEND][TemplateController] getOne called with id:', id);
     return this.templateService.getTemplate(id);
   }
 
@@ -80,7 +89,7 @@ export class TemplateController {
   // ajouter une autre fonction qui returne tous les templates sans condition
   @Get('getall')
   async getAllTemplates() {
-    console.log('[BACKEND][TemplateController] getAllTemplates called');
+    // console.log('[BACKEND][TemplateController] getAllTemplates called');
     return this.templateService.getAllTemplates();
   }
 }

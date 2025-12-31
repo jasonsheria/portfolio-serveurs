@@ -6,14 +6,14 @@ import { Suggestion } from './suggestion.schema';
 @Controller('suggest')
 export class SuggestionController {
   constructor(private readonly suggestionService: SuggestionService) {
-    console.log('[SUGGESTION] Contrôleur instancié');
+    // console.log('[SUGGESTION] Contrôleur instancié');
   }
 
   @Post('/messages')
   async createSuggestion(@Body() body: Partial<Suggestion>) {
-    console.log('[SUGGESTION] Requête reçue pour enregistrement :', body);
+    // console.log('[SUGGESTION] Requête reçue pour enregistrement :', body);
     const created = await this.suggestionService.create(body);
-    console.log('[SUGGESTION] Suggestion enregistrée :', created);
+    // console.log('[SUGGESTION] Suggestion enregistrée :', created);
     return { message: 'Suggestion enregistrée', suggestion: created };
   }
 

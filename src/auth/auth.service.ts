@@ -56,7 +56,7 @@ export class AuthService {
 
   async hashPassword(password: string): Promise<string> {
     const saltRounds = 10;
-    // console.log('Hachage du mot de passe avec bcrypt...', password); // Peut être retiré en production
+    // // console.log('Hachage du mot de passe avec bcrypt...', password); // Peut être retiré en production
     return bcrypt.hash(password, saltRounds);
   }
 

@@ -23,7 +23,7 @@ export class OwnerController {
     private readonly ownerService: OwnerService,
     private readonly uploadService: UploadService
   ) {
-    console.log('OwnerController initialized');
+    // console.log('OwnerController initialized');
   }
 
   @Post('/create')
@@ -49,7 +49,12 @@ export class OwnerController {
       }
 
       // Validate idFile
-      const idValidation = this.uploadService.validateDocumentFile(files.idFile[0]);
+      let idValidation = this.uploadService.validateDocumentFile(files.idFile[0]) || this.uploadService.validateImageFiles([files.idFile[0]]);
+      if (!idValidation.valid){
+          // en faire pour les images
+          // console.log('ID file validation failed, trying image validation');
+       idValidation = this.uploadService.validateImageFiles([files.idFile[0]]);
+      }
       if (!idValidation.valid) throw new BadRequestException(idValidation.error);
 
       // Validate propertyTitle files if present
@@ -84,7 +89,7 @@ export class OwnerController {
         ? await this.uploadService.createBulkUploadResponse(files.profile, 'owners/profiles')
         : [];
 
-      console.log('[OwnerController] create: user=', req.user?.id, ' idFile=', !!idFileResponse, ' propertyTitle_count=', propertyTitleResponses.length, ' profile_count=', profileResponses.length);
+      // console.log('[OwnerController] create: user=', req.user?.id, ' idFile=', !!idFileResponse, ' propertyTitle_count=', propertyTitleResponses.length, ' profile_count=', profileResponses.length);
 
       // Validate required meta fields and provide sensible defaults
       if (!meta || !meta.form) {

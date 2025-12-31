@@ -18,7 +18,7 @@ export class ServiceService {
 
   async getServicesByUser(userId: string): Promise<OfferedService[]> {
     const dat = this.serviceModel.find({ site: userId }).sort({ createdAt: -1 }).exec();
-    console.log(dat)
+    // console.log(dat)
     return dat
   }
 

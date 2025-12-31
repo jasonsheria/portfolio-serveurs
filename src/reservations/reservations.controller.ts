@@ -27,7 +27,6 @@ export class ReservationsController {
   @HttpPost()
   async createReservation(@Request() req, @Body() body: any) {
     const userIdRaw = req.user?._id || req.user?.userId || req.user?.sub || req.user?.id;
-    console.log('Creating reservation for user:', userIdRaw, 'with body:', body);
     return this.reservationsService.createReservation(userIdRaw, body);
   }
 

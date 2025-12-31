@@ -128,9 +128,9 @@ export class TemplateService {
   async getPublicTemplatesByType(type: string, isPublic: boolean): Promise<Template[]> {
     const filter: any = { isPublic };
     if (type) filter.type = type;
-    console.log('Filtre utilisé pour recherche de templates:', filter);
+    // console.log('Filtre utilisé pour recherche de templates:', filter);
     const results = await this.templateModel.find(filter).sort({ createdAt: -1 }).exec();
-    console.log('Nombre de templates trouvés:', results.length);
+    // console.log('Nombre de templates trouvés:', results.length);
     return results;
   }
   // Liste tous les templates sans condition

@@ -41,7 +41,7 @@ export class SiteService {
     }
     // Vérifier unicité du nom de site (siteName)
     if (data.siteName && !data.siteId) {
-      console.log('site name existe mais pas de propriété siteId');
+      // console.log('site name existe mais pas de propriété siteId');
       const existingSite = await this.siteModel.findOne({ siteName: data.siteName });
       if (existingSite) {
         return { success: false, message: 'Ce nom de site n\'est pas valide, veuillez en choisir un autre !' };
@@ -49,7 +49,7 @@ export class SiteService {
       // pour le cas de mise à jour, on ne vérifie pas l'unicité
       // si le siteName n'est pas modifié, mais que le siteId existe déjà, et le siteName n'est pas vide, on fais la mise à jpur
     } else if (data.siteName && data.siteId) {
-      // console.log('site name n\'existe pas mais propriété siteId existe');
+      // // console.log('site name n\'existe pas mais propriété siteId existe');
       const existingSite = await this.siteModel.findById(data.siteId);
       if (existingSite && existingSite.siteName) {
         const siteNameExists = await this.siteModel.findOne({ siteName: existingSite.siteName, _id: { $ne: data.siteId } });
@@ -74,7 +74,7 @@ export class SiteService {
       // ...existing code...
 
       // 1. Mettre à jour le site avec uniquement les champs de configFields
-      // console.log(" creation nouveau site avec siteId ");
+      // // console.log(" creation nouveau site avec siteId ");
       const siteupdate = await this.siteModel.findByIdAndUpdate(
         data.siteId,
         { $set: configFields },
@@ -85,14 +85,14 @@ export class SiteService {
       // mais avant rechercher le template par son Id ayant comme association le siteId si cest different si le siteId est différent de celui du template on le met à jour
 
       if (data.landingPageTemplate) {
-        console.log(" Mise à jour du template de la landing page ")
+        // console.log(" Mise à jour du template de la landing page ")
 
         const temp = await this.templateModel.find(this.templateModel.find({ site: data.siteId })).exec();
-        console.log("Template trouvé:", temp, " pour le site:", data.siteId);
+        // console.log("Template trouvé:", temp, " pour le site:", data.siteId);
 
         temp.forEach(temps => {
           // if (temps._id.toString() !== data.landingPageTemplate.toString()) {
-          //   console.log(
+          //   // console.log(
           //     "Template trouvé:", temps,
           //     "pour le site:", data.siteId,
           //     "après avoir casté nous avons:", temps._id.toString(),
@@ -367,8 +367,8 @@ export class SiteService {
     if (site.siteType === 'immobilier') {
       const mobilier = await this.mobilierModel.find({ site_id: site._id }).lean();
       const agent = await this.agentModel.find({ site_id: site._id }).lean();
-      console.log('site_id:', site._id);
-      console.log('Mobilier et agent récupérés pour le site immobilier:', mobilier, agent);
+      // console.log('site_id:', site._id);
+      // console.log('Mobilier et agent récupérés pour le site immobilier:', mobilier, agent);
     
       site.isSecure = true; // Assurer que le site est sécurisé pour l'immobilier
       return {

@@ -36,19 +36,19 @@ export class SuggestionService {
   }
 
   async create(data: Partial<Suggestion>): Promise<Suggestion> {
-    console.log('[SUGGESTION] Début création suggestion', data);
+    // console.log('[SUGGESTION] Début création suggestion', data);
     const suggestion = new this.suggestionModel({
       ...data,
       requestedAt: data.requestedAt || new Date(),
     });
     const saved = await suggestion.save();
-    console.log('[SUGGESTION] Suggestion sauvegardée en base', saved);
+    // console.log('[SUGGESTION] Suggestion sauvegardée en base', saved);
 
     // Envoi d'email de notification si userId fourni
     if (data.userId) {
       try {
         const user = await this.usersService.findById(data.userId as string);
-        console.log('[SUGGESTION] Utilisateur destinataire trouvé :', user);
+        // console.log('[SUGGESTION] Utilisateur destinataire trouvé :', user);
         if (user && user.email) {
           await sendSuggestionNotification(user.email, {
             senderFirstName: data.firstName || '',
@@ -58,9 +58,9 @@ export class SuggestionService {
             phone: data.phone || '',
             email: data.email || ''
           });
-          console.log('[SUGGESTION] Email de notification envoyé à', user.email);
+          // console.log('[SUGGESTION] Email de notification envoyé à', user.email);
         } else {
-          console.log('[SUGGESTION] Aucun email trouvé pour le destinataire');
+          // console.log('[SUGGESTION] Aucun email trouvé pour le destinataire');
         }
       } catch (e) {
         console.error('[SUGGESTION] Erreur lors de l\'envoi de l\'email de notification :', e);

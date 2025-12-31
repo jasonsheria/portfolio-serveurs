@@ -21,7 +21,7 @@ async function run() {
     form.append('images', fs.createReadStream(filePath));
 
     const url = 'http://localhost:5000/api/mobilier';
-    console.log('Posting to', url);
+    // console.log('Posting to', url);
 
     const res = await axios.post(url, form, {
       headers: {
@@ -33,14 +33,14 @@ async function run() {
       validateStatus: null
     });
 
-    console.log('Status:', res.status);
-    try { console.log('Body:', JSON.stringify(res.data, null, 2)); } catch (e) { console.log('Body (raw):', res.data); }
+    // console.log('Status:', res.status);
+    try { // console.log('Body:', JSON.stringify(res.data, null, 2)); } catch (e) { // console.log('Body (raw):', res.data); }
 
     if (res.status >= 200 && res.status < 300) {
-      console.log('\n--- Validation of images field ---');
+      // console.log('\n--- Validation of images field ---');
       const images = res.data?.images || res.data?.images || [];
       if (Array.isArray(images) && images.length > 0) {
-        images.forEach((u, i) => console.log(`${i}: ${u}`));
+        images.forEach((u, i) => // console.log(`${i}: ${u}`));
       } else {
         console.warn('No images array found in response.');
       }

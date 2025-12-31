@@ -55,9 +55,9 @@ export class AuthController {
   @Get('verify-email')
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Query('token') token: string) {
-    console.log('Token reçu pour vérification:', token);
+    // console.log('Token reçu pour vérification:', token);
     const user = await this.userService.findByVerificationToken(token);
-    console.log('Utilisateur trouvé:', user);
+    // console.log('Utilisateur trouvé:', user);
     if (!user) {
       throw new UnauthorizedException('Lien de vérification invalide ou expiré.');
     }
@@ -192,7 +192,7 @@ export class AuthController {
   ) {
   const userId = req.user?.id || req.user?.userId || req.user?._id;
   this.logger.debug(`Mise à jour du profil pour l'utilisateur: ${userId}`);
-  console.log('[AuthController] updateProfile: received files summary=', Object.keys(files).reduce((acc, key) => ({ ...acc, [key]: (files as any)[key]?.length || 0 }), {}));
+  // console.log('[AuthController] updateProfile: received files summary=', Object.keys(files).reduce((acc, key) => ({ ...acc, [key]: (files as any)[key]?.length || 0 }), {}));
 
     try {
       // Validate all files if provided
@@ -292,7 +292,7 @@ export class AuthController {
       throw new BadRequestException('Email et nouveau mot de passe requis.');
     }
     // LOG pour debug : afficher le nouveau mot de passe reçu
-    console.log('[DEBUG] Nouveau mot de passe reçu pour réinitialisation:', newPassword);
+    // console.log('[DEBUG] Nouveau mot de passe reçu pour réinitialisation:', newPassword);
     // Génère un code à 6 chiffres
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 60 * 60 * 1000); // 1h

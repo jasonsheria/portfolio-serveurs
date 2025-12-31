@@ -105,7 +105,7 @@ export class MobilierService {
     };
 
     const total = await this.mobilierModel.countDocuments(filter);
-    console.log("Total biens for proprietaire:", total);
+    // console.log("Total biens for proprietaire:", total);
     const pages = Math.ceil(total / limit);
     const skip = (page - 1) * limit;
 
@@ -120,7 +120,7 @@ export class MobilierService {
       })
       .populate('site')
       .exec();
-      console.log("Mobiliers found:", mobiliers.length);
+      // console.log("Mobiliers found:", mobiliers.length);
 
     return {
       data: mobiliers,

@@ -126,18 +126,15 @@ export class ReservationsService {
         } catch (e) {
             throw new BadRequestException('Invalid propertyId format');
         }
-        console.log("Creating reservation for propertyId:", propertyId.toString());
 
         const mobilier = await this.mobilierModel.findById(propertyId).exec();
         const vehicule = await this.vehiculeModel.findById( propertyId).exec();
        
 
         if (!mobilier && !vehicule) {
-            console.log("property not found");
             throw new BadRequestException('Property not found');
         }
         const ownerId = mobilier?.proprietaire || vehicule?.proprietaire;
-        console.log("ownerId", ownerId);
         const reservationDoc = await this.reservationModel.create({
             property: propertyId,
             user: userId ? new Types.ObjectId(userId.toString()) : undefined,
@@ -150,7 +147,6 @@ export class ReservationsService {
             expired: false,
             name : body.name,
         });
-        console.log("Reservation created:", reservationDoc);
 
         // Create a notification for the property owner and for the reserving user
         try {

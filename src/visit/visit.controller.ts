@@ -21,7 +21,7 @@ export class VisitController {
   async getVisitsByTemplate(@Query('site') templateId: string) {
     if (!templateId) return { success: false, message: 'siteId manquant' };
     const data = this.visitService.getVisitsByTemplate(templateId);
-    console.log(data);
+    // console.log(data);
     return data;
   }
 }

@@ -19,7 +19,7 @@ if (!filePath) {
   }
   fs.writeFileSync(tmpFile, Buffer.from(pngBase64, 'base64'));
   filePath = tmpFile;
-  console.log('No file provided — created tiny test PNG at', filePath);
+  // console.log('No file provided — created tiny test PNG at', filePath);
 }
 
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
@@ -52,12 +52,12 @@ cloudinary.v2.config({
       CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
       CLOUDINARY_UPLOAD_FOLDER: process.env.CLOUDINARY_UPLOAD_FOLDER,
     };
-    console.log('Cloudinary env (masked):');
+    // console.log('Cloudinary env (masked):');
     function mask(s) { if (!s) return '<missing>'; return s.length>6 ? s.slice(0,3)+'...'+s.slice(-3) : '***'; }
-    console.log('  CLOUDINARY_CLOUD_NAME:', env.CLOUDINARY_CLOUD_NAME ? env.CLOUDINARY_CLOUD_NAME : '<missing>');
-    console.log('  CLOUDINARY_API_KEY:', mask(env.CLOUDINARY_API_KEY));
-    console.log('  CLOUDINARY_API_SECRET:', env.CLOUDINARY_API_SECRET ? ('len='+env.CLOUDINARY_API_SECRET.length) : '<missing>');
-    console.log('  CLOUDINARY_UPLOAD_FOLDER:', env.CLOUDINARY_UPLOAD_FOLDER || '<default: uploads>');
+    // console.log('  CLOUDINARY_CLOUD_NAME:', env.CLOUDINARY_CLOUD_NAME ? env.CLOUDINARY_CLOUD_NAME : '<missing>');
+    // console.log('  CLOUDINARY_API_KEY:', mask(env.CLOUDINARY_API_KEY));
+    // console.log('  CLOUDINARY_API_SECRET:', env.CLOUDINARY_API_SECRET ? ('len='+env.CLOUDINARY_API_SECRET.length) : '<missing>');
+    // console.log('  CLOUDINARY_UPLOAD_FOLDER:', env.CLOUDINARY_UPLOAD_FOLDER || '<default: uploads>');
 
     // Trim whitespace from env values (in-memory) to avoid accidental spaces
     const cloudName = (process.env.CLOUDINARY_CLOUD_NAME || '').toString().trim();
@@ -76,11 +76,11 @@ cloudinary.v2.config({
       api_secret: apiSecret,
     });
 
-    console.log('Performing Cloudinary API auth check (listing 1 resource)...');
+    // console.log('Performing Cloudinary API auth check (listing 1 resource)...');
     try {
       // This will fail with 401 if credentials are invalid
       const resCheck = await cloudinary.v2.api.resources({ max_results: 1 });
-      console.log('Cloudinary auth check: OK. sample resources count:', resCheck.resources ? resCheck.resources.length : 0);
+      // console.log('Cloudinary auth check: OK. sample resources count:', resCheck.resources ? resCheck.resources.length : 0);
     } catch (ckErr) {
       console.error('Cloudinary auth check failed:');
       // Show as much info as possible without leaking secret
@@ -89,17 +89,17 @@ cloudinary.v2.config({
       // continue to attempt upload so uploader error is shown as well
     }
 
-    console.log('Uploading', filePath, 'to Cloudinary...');
+    // console.log('Uploading', filePath, 'to Cloudinary...');
     const res = await cloudinary.v2.uploader.upload(filePath, {
       folder: uploadFolder,
       use_filename: true,
       unique_filename: true,
       resource_type: 'auto',
     });
-    console.log('Upload successful:');
-    console.log('public_id:', res.public_id);
-    console.log('secure_url:', res.secure_url);
-    console.log('raw response:', res);
+    // console.log('Upload successful:');
+    // console.log('public_id:', res.public_id);
+    // console.log('secure_url:', res.secure_url);
+    // console.log('raw response:', res);
       // Cleanup tmp file if we created it
       if (filePath === tmpFile) {
         try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore */ }

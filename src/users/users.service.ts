@@ -232,7 +232,7 @@ export class UsersService {
 
         if (!fs.existsSync(userUploadDir)) {
             fs.mkdirSync(userUploadDir, { recursive: true });
-            console.log(`Created directory for user ${username}: ${userUploadDir}`);
+            // console.log(`Created directory for user ${username}: ${userUploadDir}`);
         }
 
         const fileHandlingPromises = [];

@@ -10,7 +10,7 @@ export class ProjectService {
   ) {}
 
   async findAllByUser(userId: string) {
-    console.log(userId);
+    // console.log(userId);
     return this.projectModel.find({ user: userId }).sort({ createdAt: -1 }).exec();
   }
 

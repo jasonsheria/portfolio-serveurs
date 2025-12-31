@@ -138,7 +138,7 @@
 
         // Géré lorsque la connexion WebSocket est établie avec succès
         socket.on('connect', () => {
-            console.log('Connecté au serveur ! Socket ID:', socket.id);
+            // console.log('Connecté au serveur ! Socket ID:', socket.id);
             statusDiv.textContent = `Statut : Connecté (ID: ${socket.id})`;
             appendMessage('CONNECT', `Connecté au serveur (ID: ${socket.id})`);
              // Activez les boutons d'action une fois connecté
@@ -166,7 +166,7 @@
 
         // Géré lorsque la connexion est perdue
          socket.on('disconnect', (reason) => {
-            console.log('Déconnecté :', reason);
+            // console.log('Déconnecté :', reason);
             statusDiv.textContent = `Statut : Déconnecté - ${reason}`;
             appendMessage('DISCONNECT', `Déconnecté: ${reason}`);
              // Désactivez les boutons lorsque déconnecté
@@ -188,33 +188,33 @@
 
         // Écoute l'événement 'messageHistory' (envoyé par handleJoinRoom)
         socket.on('messageHistory', (history) => {
-             console.log('Historique des messages reçu :', history);
+             // console.log('Historique des messages reçu :', history);
              appendMessage('MESSAGE_HISTORY', JSON.stringify(history, null, 2)); // Pretty print JSON
         });
 
         // Écoute l'événement 'newMessage' (envoyé par handleMessage)
         socket.on('newMessage', (message) => {
-             console.log('Nouveau message reçu :', message);
+             // console.log('Nouveau message reçu :', message);
              // Afficher le contenu du message reçu
              appendMessage('NEW_MESSAGE', JSON.stringify(message));
         });
 
         // Écoute l'événement 'userTyping' (envoyé par handleTyping)
          socket.on('userTyping', (data) => {
-            console.log('Événement userTyping reçu :', data);
+            // console.log('Événement userTyping reçu :', data);
             // Vous pourriez afficher un indicateur de saisie basé sur data.userId et data.isTyping
             appendMessage('USER_TYPING', JSON.stringify(data));
         });
 
         // Écoute un événement optionnel pour indiquer qu'un utilisateur a rejoint (si implémenté)
         socket.on('userJoined', (data) => {
-            console.log('Événement userJoined reçu :', data);
+            // console.log('Événement userJoined reçu :', data);
             appendMessage('USER_JOINED', JSON.stringify(data));
         });
 
          // Écoute un événement optionnel pour indiquer qu'un utilisateur a quitté (si implémenté)
         socket.on('userLeft', (data) => {
-            console.log('Événement userLeft reçu :', data);
+            // console.log('Événement userLeft reçu :', data);
             appendMessage('USER_LEFT', JSON.stringify(data));
         });
 
@@ -232,7 +232,7 @@
         joinRoomBtn.addEventListener('click', () => {
             const roomId = roomIdInput.value.trim(); // trim() pour enlever les espaces inutiles
             if (socket.connected && roomId) {
-                console.log('Émission de "joinRoom" pour la room:', roomId);
+                // console.log('Émission de "joinRoom" pour la room:', roomId);
                 socket.emit('joinRoom', { roomId: roomId });
                  appendMessage('EMIT', `joinRoom { roomId: "${roomId}" }`);
             } else {
@@ -246,7 +246,7 @@
              const roomId = roomIdInput.value.trim();
              const content = messageContentInput.value; // Laissez le contenu tel quel, même vide s'il est autorisé
              if (socket.connected && roomId) { // Vérifiez si le contenu est obligatoire selon votre backend
-                 console.log('Émission de "sendMessage" pour la room:', roomId, 'Contenu:', content);
+                 // console.log('Émission de "sendMessage" pour la room:', roomId, 'Contenu:', content);
                  socket.emit('sendMessage', { roomId: roomId, content: content });
                  appendMessage('EMIT', `sendMessage { roomId: "${roomId}", content: "${content}" }`);
                  messageContentInput.value = ''; // Efface l'input après envoi
@@ -260,7 +260,7 @@
         typingBtn.addEventListener('click', () => {
              const roomId = roomIdInput.value.trim();
              if (socket.connected && roomId) {
-                  console.log('Émission de "typing" (true) pour la room:', roomId);
+                  // console.log('Émission de "typing" (true) pour la room:', roomId);
                   socket.emit('typing', { roomId: roomId, isTyping: true });
                   appendMessage('EMIT', `typing { roomId: "${roomId}", isTyping: true }`);
              } else {
@@ -273,7 +273,7 @@
          stopTypingBtn.addEventListener('click', () => {
              const roomId = roomIdInput.value.trim();
              if (socket.connected && roomId) {
-                  console.log('Émission de "typing" (false) pour la room:', roomId);
+                  // console.log('Émission de "typing" (false) pour la room:', roomId);
                   socket.emit('typing', { roomId: roomId, isTyping: false });
                    appendMessage('EMIT', `typing { roomId: "${roomId}", isTyping: false }`);
              } else {
@@ -286,7 +286,7 @@
          leaveRoomBtn.addEventListener('click', () => {
              const roomId = roomIdInput.value.trim();
              if (socket.connected && roomId) {
-                  console.log('Émission de "leaveRoom" pour la room:', roomId);
+                  // console.log('Émission de "leaveRoom" pour la room:', roomId);
                   socket.emit('leaveRoom', { roomId: roomId });
                   appendMessage('EMIT', `leaveRoom { roomId: "${roomId}" }`);
                   // Optionnel: effacer l'historique local après avoir quitté la room
